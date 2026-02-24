@@ -199,8 +199,9 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         if (!stationQueues.current[stationId] || stationQueues.current[stationId].length === 0) {
             // Refill and shuffle the queue
             let shuffled = shuffleArray(sourceUrls);
-            // If the first song in new queue is the same as the last played song, swap it
-            if (currentUrl && shuffled[0] === currentUrl && shuffled.length > 1) {
+            // If the first song in new deck is the same as the last played song, swap it
+            // We use includes() because browser's audio.src is often the full absolute URL
+            if (currentUrl && currentUrl.includes(shuffled[0]) && shuffled.length > 1) {
                 [shuffled[0], shuffled[1]] = [shuffled[1], shuffled[0]];
             }
             stationQueues.current[stationId] = shuffled;
@@ -261,8 +262,8 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         trebleFilterRef.current = trebleFilter;
 
         if (state.stations.length > 0) {
-            const urls = state.stations[0].sourceUrls;
-            elA.src = urls[Math.floor(Math.random() * urls.length)];
+            const s = state.stations[0];
+            elA.src = getNextTrack(s.id, s.sourceUrls);
         }
 
         dispatch({ type: 'ADD_LOG', text: 'Broadcast Audio Engine Initialized (Dual-Source)' });
