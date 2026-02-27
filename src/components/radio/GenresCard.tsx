@@ -1,27 +1,8 @@
 import { useRadio } from '../../hooks/useRadio';
-import { type Station, type ProgramMode } from '../../types/radio';
 import { Card } from '../ui/Card';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Zap } from '../ui/Icons';
 import { useState, useCallback } from 'react';
 
-/* ─── Helpers ─── */
-const STATION_GROUPS = {
-    MOOD: ['feel-good-1', 'ambient-1', 'lofi-1'],
-    RHYTHM: ['afro-1', 'techno-1', 'jazz-1'],
-    FUTURE: ['synth-1']
-};
-
-function getEnergyLabel(mode: ProgramMode): string {
-    switch (mode) {
-        case 'After Hours':
-        case 'Continuous Flow': return 'Low';
-        case 'Pulse / Groove':
-        case 'Experimental': return 'High';
-        case 'Golden Hour':
-        default: return 'Med';
-    }
-}
 
 /* ─── Streamer: Soundboard Card ─── */
 function SoundboardCard() {
@@ -136,77 +117,6 @@ function TipCard() {
     );
 }
 
-/* ─── Listener: Station Programming (original behavior) ─── */
-function StationProgramming() {
-    const { state, dispatch } = useRadio();
-    const { stations, activeStationId, programMode } = state;
-
-    const handleSelect = (station: Station) => {
-        if (station.id === activeStationId) return;
-        dispatch({ type: 'SWITCH_STATION', stationId: station.id });
-        dispatch({ type: 'SET_STATUS', status: 'PLAYING' });
-        const nextSegment = station.mockSegments[Math.floor(Math.random() * station.mockSegments.length)];
-        dispatch({ type: 'UPDATE_NOW_PLAYING', text: nextSegment });
-    };
-
-    const { listenerCounts } = state;
-    const energy = getEnergyLabel(programMode);
-
-    const renderGroup = (title: string, stationIds: string[]) => {
-        const groupStations = stations.filter(s => stationIds.includes(s.id));
-        if (groupStations.length === 0) return null;
-
-        return (
-            <div key={title} className="mb-4 last:mb-0">
-                <h4 className="text-[10px] uppercase tracking-widest font-bold text-secondary mb-2 opacity-60 ml-1">{title}</h4>
-                <div className="grid grid-cols-1 gap-2">
-                    {groupStations.map(station => {
-                        const isActive = station.id === activeStationId;
-                        const count = listenerCounts[station.id] || 0;
-
-                        return (
-                            <motion.button
-                                key={station.id}
-                                onClick={() => handleSelect(station)}
-                                whileHover={{ scale: 1.01 }}
-                                whileTap={{ scale: 0.99 }}
-                                className={`relative flex items-center justify-between p-2 rounded-lg border transition-all group ${isActive
-                                    ? 'bg-accent text-white border-accent shadow-md'
-                                    : 'bg-card text-primary border-card-border hover:border-secondary/30'
-                                    }`}
-                            >
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-red-500 animate-pulse' : 'bg-secondary/30'}`} />
-                                    <div className="flex flex-col text-left">
-                                        <span className="text-xs font-semibold leading-none mb-0.5">{station.name}</span>
-                                        <span className={`text-[9px] ${isActive ? 'text-white/60' : 'text-primary/40'}`}>
-                                            LIVE • {count.toLocaleString()} tuned in
-                                        </span>
-                                    </div>
-                                </div>
-                                <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] uppercase font-bold tracking-wider ${isActive ? 'bg-white/10 text-white/90' : 'bg-white/5 text-secondary'}`}>
-                                    <Zap size={8} fill="currentColor" />
-                                    {energy}
-                                </div>
-                            </motion.button>
-                        );
-                    })}
-                </div>
-            </div>
-        );
-    };
-
-    return (
-        <>
-            <p className="text-xs text-primary/60 mb-4">Tuning changes global programming for all listeners.</p>
-            <div className="overflow-y-auto max-h-[300px] pr-1 -mr-1 custom-scrollbar">
-                {renderGroup('MOOD', STATION_GROUPS.MOOD)}
-                {renderGroup('RHYTHM', STATION_GROUPS.RHYTHM)}
-                {renderGroup('FUTURE', STATION_GROUPS.FUTURE)}
-            </div>
-        </>
-    );
-}
 
 /* ─── Main Export ─── */
 export function GenresCard() {

@@ -1,6 +1,6 @@
 import { useReducer, useEffect, useRef, useCallback, type ReactNode } from 'react';
 import { RadioContext, AudioRefsContext } from './RadioContexts';
-import { RadioState, RadioAction, Station, MusicSource, SpotifyPlaylist } from '../types/radio';
+import { RadioState, RadioAction, Station, MusicSource } from '../types/radio';
 
 const ALL_AUDIO = [
     '/audio/Birds & the Bees - Baby Keem.mp3',
