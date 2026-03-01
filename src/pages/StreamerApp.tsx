@@ -214,9 +214,11 @@ function SourceLinkerModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
                     const fetched = await SpotifyService.fetchPlaylists(spotifyToken);
                     setPlaylists(fetched);
                     setStep('search');
-                } catch {
+                } catch (err) {
+                    console.error('Failed to load Spotify playlists:', err);
+                    // Token might be expired — show source selection, don't auto-reauth
                     localStorage.removeItem('spotify_access_token');
-                    await SpotifyService.authorize();
+                    setStep('source');
                 }
             } else {
                 await SpotifyService.authorize();
@@ -1287,13 +1289,19 @@ function TransportBar() {
 function StudioLayout() {
     const { state, dispatch } = useRadio();
     const [isLinkerOpen, setIsLinkerOpen] = useState(false);
+    const codeExchangedRef = useRef(false);
 
     // Spotify OAuth Handshake Completion
     useEffect(() => {
         const urlParams = new URLSearchParams(window.location.search);
         const code = urlParams.get('code');
 
-        if (code) {
+        if (code && !codeExchangedRef.current) {
+            codeExchangedRef.current = true;
+
+            // Clean the URL immediately to prevent re-runs
+            window.history.replaceState({}, document.title, window.location.pathname);
+
             const completeAuth = async () => {
                 dispatch({ type: 'ADD_LOG', text: 'Spotify Handshake: Exchanging code...' });
                 try {
@@ -1304,19 +1312,16 @@ function StudioLayout() {
 
                     dispatch({ type: 'ADD_LOG', text: `✅ Spotify Connected! Open Music Source to browse your library.` });
 
-                    // Clean the URL to remove the code
-                    window.history.replaceState({}, document.title, window.location.pathname);
-
                     // Auto-open the linker so user can pick playlists
                     setIsLinkerOpen(true);
                 } catch (err) {
                     console.error('Spotify Auth Error:', err);
-                    dispatch({ type: 'ADD_LOG', text: 'Spotify Link Failed.', level: 'error' });
+                    dispatch({ type: 'ADD_LOG', text: 'Spotify Link Failed. Try connecting again.', level: 'error' });
                 }
             };
             completeAuth();
         }
-    }, [dispatch, state.activePlaylistId]);
+    }, [dispatch]);
 
     // Mock Audience Interaction Engine
     useEffect(() => {
