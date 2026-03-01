@@ -192,8 +192,8 @@ function StudioFader({ id, label, value, onDoubleClick, className }: { id: strin
 function SourceLinkerModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
     const { dispatch } = useRadio();
     const spotifyToken = localStorage.getItem('spotify_access_token');
-    const [step, setStep] = useState<'source' | 'search' | 'connecting' | 'importing'>(spotifyToken ? 'connecting' : 'source');
-    const [selectedSource, setSelectedSource] = useState<string | null>(spotifyToken ? 'spotify' : null);
+    const [step, setStep] = useState<'source' | 'search' | 'connecting' | 'importing'>('source');
+    const [selectedSource, setSelectedSource] = useState<string | null>(null);
     const [playlists, setPlaylists] = useState<SpotifyPlaylist[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [importingId, setImportingId] = useState<string | null>(null);
@@ -278,13 +278,8 @@ function SourceLinkerModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
         }
     };
 
-    useEffect(() => {
-        if (isOpen && spotifyToken && playlists.length === 0) {
-            SpotifyService.fetchPlaylists(spotifyToken)
-                .then(fetched => { setPlaylists(fetched); setStep('search'); })
-                .catch(() => { localStorage.removeItem('spotify_access_token'); setStep('source'); });
-        }
-    }, [isOpen, spotifyToken, playlists.length]);
+    // Auto-fetch logic removed to prevent loops. 
+    // User must click the Spotify card to browse their library.
 
     return (
         <AnimatePresence>
