@@ -1,78 +1,71 @@
 import { useReducer, useEffect, useRef, useCallback, type ReactNode } from 'react';
 import { RadioContext, AudioRefsContext } from './RadioContexts';
-import { RadioState, RadioAction, Station, MusicSource } from '../types/radio';
+import { RadioState, RadioAction, Playlist, MusicSource, Track } from '../types/radio';
 
-const ALL_AUDIO = [
-    '/audio/Birds & the Bees - Baby Keem.mp3',
-    '/audio/Good Flirts - Baby Keem.mp3',
-    '/audio/Perfect Enemy - Vinnie Paz.mp3',
-    '/audio/Poor Thang - J. Cole.mp3',
-    '/audio/sexy music..mp3'
+const ALL_TRACKS: Track[] = [
+    { id: 'bk-1', instanceId: 'bk-1-init', title: 'Birds & the Bees', artist: 'Baby Keem', bpm: 124, url: '/audio/Birds & the Bees - Baby Keem.mp3' },
+    { id: 'bk-2', instanceId: 'bk-2-init', title: 'Good Flirts', artist: 'Baby Keem', bpm: 118, url: '/audio/Good Flirts - Baby Keem.mp3' },
+    { id: 'vp-1', instanceId: 'vp-1-init', title: 'Perfect Enemy', artist: 'Vinnie Paz', bpm: 92, url: '/audio/Perfect Enemy - Vinnie Paz.mp3' },
+    { id: 'jc-1', instanceId: 'jc-1-init', title: 'Poor Thang', artist: 'J. Cole', bpm: 88, url: '/audio/Poor Thang - J. Cole.mp3' },
+    { id: 'sm-1', instanceId: 'sm-1-init', title: 'Sexy Music', artist: 'Unknown', bpm: 120, url: '/audio/sexy music..mp3' },
 ];
 
-const STATIONS: Station[] = [
+const FX_ASSETS: Record<string, string> = {
+    AIRHORN: 'https://assets.mixkit.co/sfx/preview/mixkit-stadium-air-horn-loud-and-clear-1123.mp3',
+    REWIND: 'https://assets.mixkit.co/sfx/preview/mixkit-tape-rewind-vibration-2023.mp3',
+    DROP: 'https://assets.mixkit.co/sfx/preview/mixkit-electronic-retro-glitch-drop-2495.mp3',
+    HYPE: 'https://assets.mixkit.co/sfx/preview/mixkit-cinematic-impact-braam-sound-2542.mp3'
+};
+
+const DEFAULT_PLAYLISTS: Playlist[] = [
     {
         id: 'feel-good-1',
         name: 'Feel-Good',
         description: 'Vibes for a good time',
-        sourceType: 'local',
-        sourceUrls: ALL_AUDIO,
-        tags: ['Vibe', 'Happy', 'Soul'],
-        mockSegments: ['Sunshine Day', 'Good Times Roll', 'Morning Coffee', 'Sunday Drive', 'Golden Hour']
+        tracks: ALL_TRACKS,
+        tags: ['Vibe', 'Happy', 'Soul']
     },
     {
         id: 'lofi-1',
         name: 'Lo-Fi Hip Hop',
         description: 'Quality hip-hop and chill beats',
-        sourceType: 'local',
-        sourceUrls: ALL_AUDIO,
-        tags: ['Chill', 'Study', 'Beats'],
-        mockSegments: ['Rainy Window', 'Homework Edit', 'Late Night Coffee', 'Vinyl Crackle loops', 'Cat on Keyboard']
+        tracks: ALL_TRACKS.filter(t => t.bpm < 100),
+        tags: ['Chill', 'Study', 'Beats']
     },
     {
         id: 'techno-1',
         name: 'Minimal Techno',
         description: 'Deep driving minimal techno, 128bpm',
-        sourceType: 'local',
-        sourceUrls: ALL_AUDIO,
-        tags: ['Techno', 'Minimal', 'Dark'],
-        mockSegments: ['Warehouse Echo', 'Berlin Sub', 'Modulator X', 'Kick Drum Therapy', '3AM Vibe']
+        tracks: ALL_TRACKS.filter(t => t.bpm >= 120),
+        tags: ['Techno', 'Minimal', 'Dark']
     },
     {
         id: 'jazz-1',
         name: 'Jazz Fusion',
         description: 'Upbeat Jazz Fusion with complex solos',
-        sourceType: 'local',
-        sourceUrls: ALL_AUDIO,
-        tags: ['Jazz', 'Fusion', 'Funk'],
-        mockSegments: ['Sax Attack', 'Bass Slap 101', 'Fusion Kitchen', 'Smooth Operator', 'Blue Note Vibe']
+        tracks: ALL_TRACKS,
+        tags: ['Jazz', 'Fusion', 'Funk']
     },
     {
         id: 'afro-1',
         name: 'Afrobeat',
         description: 'Energetic Afrobeat rhythms',
-        sourceType: 'local',
-        sourceUrls: ALL_AUDIO,
-        tags: ['Afrobeat', 'Ryhthm', 'Brass'],
-        mockSegments: ['Lagos Night Drive', 'Palmwine Groove', 'Talking Drum', 'Heatwave', 'Market Day']
+        tracks: ALL_TRACKS,
+        tags: ['Afrobeat', 'Ryhthm', 'Brass']
     },
     {
         id: 'synth-1',
         name: 'Synthwave',
         description: 'Retro 80s Synthwave, neon lights',
-        sourceType: 'local',
-        sourceUrls: ALL_AUDIO,
-        tags: ['Retro', 'Synth', '80s'],
-        mockSegments: ['Neon Arps', 'Cyber Chase', 'VHS Dreams', 'Nightcall Cover', 'Grid Runner']
+        tracks: ALL_TRACKS.filter(t => t.bpm >= 110),
+        tags: ['Retro', 'Synth', '80s']
     },
     {
         id: 'ambient-1',
         name: 'Ambient',
         description: 'Ethereal soundscapes',
-        sourceType: 'local',
-        sourceUrls: ALL_AUDIO,
-        tags: ['Ambient', 'Drone', 'Sleep'],
-        mockSegments: ['Deep Space', 'Ocean Drift', 'Beta Waves', 'Cloud Computing', 'Silence & Awe']
+        tracks: ALL_TRACKS,
+        tags: ['Ambient', 'Drone', 'Sleep']
     }
 ];
 
@@ -83,8 +76,8 @@ const initialState: RadioState = {
     apiKey: '',
     prompt: 'Feel-Good',
     bpm: 120,
-    density: 0.5,
-    brightness: 0.5,
+    density: 1.0,
+    brightness: 1.0,
     mixOptions: {
         muteBass: false,
         muteDrums: false,
@@ -93,28 +86,43 @@ const initialState: RadioState = {
     scale: 'Minor',
     programMode: 'Continuous Flow',
 
-    activeStationId: STATIONS[0].id,
-    nowPlaying: 'Ready. Select a station...',
-    stations: STATIONS,
+    activePlaylistId: DEFAULT_PLAYLISTS[0].id,
+    nowPlaying: 'Ready. Select a playlist...',
+    playlists: DEFAULT_PLAYLISTS,
+    library: ALL_TRACKS,
 
     listenerCounts: {
-        'feel-good-1': 1240,
-        'lofi-1': 840,
-        'techno-1': 2100,
-        'jazz-1': 450,
-        'afro-1': 3420,
-        'synth-1': 920,
-        'ambient-1': 1800,
+        'feel-good-1': 1204,
+        'lofi-1': 892,
+        'techno-1': 456,
+        'jazz-1': 1402,
+        'afro-1': 210,
+        'synth-1': 567,
+        'ambient-1': 329
     },
     schedule: {
-        current: 'Loading...',
-        next: 'Up Next',
-        later: 'Later',
-        remaining: 45
+        current: ALL_TRACKS[0],
+        queue: ALL_TRACKS.slice(1, 4),
+        history: [],
+        remaining: 180
     },
 
     logs: [],
-    seed: Date.now(),
+    seed: Math.random(),
+
+    micActive: false,
+    micGain: 1.0,
+    duckingIntensity: 0.6,
+    wallet: {
+        total: 1250,
+        session: 0,
+        history: [
+            { id: 'h1', user: 'CyberPunk', amount: 50, item: 'Digital Vinyl', ts: new Date(Date.now() - 3600000) },
+            { id: 'h2', user: 'RaveMaster', amount: 100, item: 'Gold Mic', ts: new Date(Date.now() - 7200000) }
+        ],
+        isVaultOpen: false
+    },
+    crossfadeLength: 2.0
 };
 
 function radioReducer(state: RadioState, action: RadioAction): RadioState {
@@ -143,19 +151,37 @@ function radioReducer(state: RadioState, action: RadioAction): RadioState {
                 ts: new Date(),
                 text: action.text,
                 level: action.level || 'info',
+                type: action.logType || 'SYSTEM',
+                user: action.user
             };
-            return { ...state, logs: [...state.logs, newLog] };
+            // Keep logs reasonable - 100 entries
+            const newLogs = [...state.logs, newLog].slice(-100);
+            return { ...state, logs: newLogs };
         }
         case 'REGENERATE_SEED':
             return { ...state, seed: Date.now() };
         case 'CLEAR_LOGS':
             return { ...state, logs: [] };
-        case 'SWITCH_STATION': {
-            const station = STATIONS.find(s => s.id === action.stationId);
+        case 'SWITCH_PLAYLIST': {
+            const playlist = state.playlists.find(p => p.id === action.playlistId);
+            if (!playlist) return state;
+
+            const tracksWithInstances = playlist.tracks.map(t => ({
+                ...t,
+                instanceId: t.instanceId || `${t.id}-${Math.random().toString(36).substr(2, 9)}`
+            }));
+
             return {
                 ...state,
-                activeStationId: action.stationId,
-                prompt: station ? station.name : state.prompt
+                activePlaylistId: action.playlistId,
+                prompt: playlist.name,
+                nowPlaying: playlist.name,
+                schedule: {
+                    current: tracksWithInstances[0] || null,
+                    queue: tracksWithInstances.slice(1, 4), // Take next few
+                    history: [], // Reset history on playlist switch
+                    remaining: 180
+                }
             };
         }
         case 'UPDATE_NOW_PLAYING':
@@ -166,12 +192,20 @@ function radioReducer(state: RadioState, action: RadioAction): RadioState {
             return { ...state, listenerCounts: action.counts };
         case 'UPDATE_SCHEDULE':
             return { ...state, schedule: action.schedule };
+        case 'REORDER_QUEUE':
+            return { ...state, schedule: { ...state.schedule, queue: action.queue } };
         case 'SET_BROADCAST_STATUS':
             return { ...state, broadcastStatus: action.status };
+        case 'SET_MIC_ACTIVE':
+            return { ...state, micActive: action.active };
+        case 'SET_MIC_GAIN':
+            return { ...state, micGain: action.gain };
+        case 'SET_DUCKING':
+            return { ...state, duckingIntensity: action.intensity };
         case 'CONNECT_SPOTIFY': {
-            const updatedStations = state.stations.map(s => {
-                if (s.id === action.stationId) {
-                    const existingSources = s.linkedSources || [];
+            const updatedPlaylists = state.playlists.map(p => {
+                if (p.id === action.playlistId) {
+                    const existingSources = p.linkedSources || [];
                     const otherSources = existingSources.filter(src => src.type !== 'spotify');
                     const spotifySource: MusicSource = {
                         id: 'spotify-root',
@@ -182,26 +216,116 @@ function radioReducer(state: RadioState, action: RadioAction): RadioState {
                         playlists: action.playlists
                     };
                     return {
-                        ...s,
+                        ...p,
                         linkedSources: [...otherSources, spotifySource]
                     };
                 }
-                return s;
+                return p;
             });
-            return { ...state, stations: updatedStations };
+            return { ...state, playlists: updatedPlaylists };
         }
         case 'ADD_SOURCE': {
-            const updatedStations = state.stations.map(s => {
-                if (s.id === action.stationId) {
+            const updatedPlaylists = state.playlists.map(p => {
+                if (p.id === action.playlistId) {
                     return {
-                        ...s,
-                        linkedSources: [...(s.linkedSources || []), action.source]
+                        ...p,
+                        linkedSources: [...(p.linkedSources || []), action.source]
                     };
                 }
-                return s;
+                return p;
             });
-            return { ...state, stations: updatedStations };
+            return { ...state, playlists: updatedPlaylists };
         }
+        case 'CREATE_PLAYLIST': {
+            const newPlaylist: Playlist = {
+                id: Math.random().toString(36).substr(2, 9),
+                name: action.name,
+                description: 'User created playlist',
+                tracks: [],
+                tags: ['User']
+            };
+            return { ...state, playlists: [...state.playlists, newPlaylist] };
+        }
+        case 'ADD_TO_LIBRARY': {
+            const tracksWithInstances = action.tracks.map(t => ({
+                ...t,
+                instanceId: t.instanceId || `${t.id}-${Math.random().toString(36).substr(2, 9)}`
+            }));
+            return { ...state, library: [...state.library, ...tracksWithInstances] };
+        }
+        case 'ADD_TO_PLAYLIST': {
+            const trackWithInstance = {
+                ...action.track,
+                instanceId: `${action.track.id}-${Math.random().toString(36).substr(2, 9)}`
+            };
+            const updatedPlaylists = state.playlists.map(p => {
+                if (p.id === action.playlistId) {
+                    return { ...p, tracks: [...p.tracks, trackWithInstance] };
+                }
+                return p;
+            });
+
+            // Sync with active schedule if we are adding to the current playlist
+            let newSchedule = state.schedule;
+            if (action.playlistId === state.activePlaylistId) {
+                if (!state.schedule.current) {
+                    newSchedule = {
+                        ...state.schedule,
+                        current: trackWithInstance,
+                        remaining: 180,
+                        history: state.schedule.history || []
+                    };
+                } else if (state.schedule.queue.length < 10) { // Allow larger queue visibility
+                    newSchedule = {
+                        ...state.schedule,
+                        queue: [...state.schedule.queue, trackWithInstance],
+                        history: state.schedule.history || []
+                    };
+                }
+            }
+
+            return { ...state, playlists: updatedPlaylists, schedule: newSchedule };
+        }
+        case 'REORDER_PLAYLIST': {
+            const updatedPlaylists = state.playlists.map(p => {
+                if (p.id === action.playlistId) {
+                    return { ...p, tracks: action.tracks };
+                }
+                return p;
+            });
+            return { ...state, playlists: updatedPlaylists };
+        }
+        case 'DEPOSIT_HYPE': {
+            const newEntry = {
+                id: Math.random().toString(36).substr(2, 9),
+                user: action.user,
+                amount: action.amount,
+                item: action.item,
+                ts: new Date()
+            };
+            return {
+                ...state,
+                wallet: {
+                    ...state.wallet,
+                    total: state.wallet.total + action.amount,
+                    session: state.wallet.session + action.amount,
+                    history: [newEntry, ...state.wallet.history].slice(0, 50)
+                }
+            };
+        }
+        case 'TOGGLE_VAULT':
+            return {
+                ...state,
+                wallet: {
+                    ...state.wallet,
+                    isVaultOpen: typeof action.open === 'boolean' ? action.open : !state.wallet.isVaultOpen
+                }
+            };
+        case 'SET_CROSSFADE_LENGTH':
+            return {
+                ...state,
+                crossfadeLength: action.length
+            };
         default:
             return state;
     }
@@ -214,6 +338,11 @@ export function RadioProvider({ children }: { children: ReactNode }) {
     const analyserRef = useRef<AnalyserNode | null>(null);
     const bassFilterRef = useRef<BiquadFilterNode | null>(null);
     const trebleFilterRef = useRef<BiquadFilterNode | null>(null);
+    const fxBuffers = useRef<Record<string, AudioBuffer>>({});
+    const duckingGainRef = useRef<GainNode | null>(null);
+    const micSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+    const micGainRef = useRef<GainNode | null>(null);
+    const micAnalyserRef = useRef<AnalyserNode | null>(null);
 
     const audioA = useRef<HTMLAudioElement | null>(null);
     const audioB = useRef<HTMLAudioElement | null>(null);
@@ -222,14 +351,14 @@ export function RadioProvider({ children }: { children: ReactNode }) {
 
     const activePlayer = useRef<'A' | 'B'>('A');
     const lastPlayedStationId = useRef<string | null>(null);
-    const stationQueues = useRef<Record<string, string[]>>({});
+    const stationQueues = useRef<Record<string, Track[]>>({});
     const stateRef = useRef(state);
     useEffect(() => {
         stateRef.current = state;
     }, [state]);
 
     // Helper to shuffle an array
-    const shuffleArray = (array: string[]) => {
+    const shuffleArray = <T,>(array: T[]): T[] => {
         const newArr = [...array];
         for (let i = newArr.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
@@ -239,13 +368,12 @@ export function RadioProvider({ children }: { children: ReactNode }) {
     };
 
     // Helper to get next track for a station without repeating
-    const getNextTrack = useCallback((stationId: string, sourceUrls: string[], currentUrl?: string): string => {
+    const getNextTrack = useCallback((stationId: string, tracks: Track[], currentUrl?: string): Track => {
         if (!stationQueues.current[stationId] || stationQueues.current[stationId].length === 0) {
             // Refill and shuffle the queue
-            const shuffled = shuffleArray(sourceUrls);
+            const shuffled = shuffleArray(tracks);
             // If the first song in new deck is the same as the last played song, swap it
-            // We use includes() because browser's audio.src is often the full absolute URL
-            if (currentUrl && currentUrl.includes(shuffled[0]) && shuffled.length > 1) {
+            if (currentUrl && currentUrl.includes(shuffled[0].url) && shuffled.length > 1) {
                 [shuffled[0], shuffled[1]] = [shuffled[1], shuffled[0]];
             }
             stationQueues.current[stationId] = shuffled;
@@ -255,15 +383,13 @@ export function RadioProvider({ children }: { children: ReactNode }) {
 
         // Always check: if the next track is the currently playing song, skip it
         if (currentUrl && queue.length > 1) {
-            const nextIndex = queue.findIndex((track: string) => !currentUrl.includes(track));
+            const nextIndex = queue.findIndex((track: Track) => !currentUrl.includes(track.url));
             if (nextIndex > 0) {
-                // Move the non-matching track to the front
                 const [track] = queue.splice(nextIndex, 1);
                 queue.unshift(track);
             }
         }
 
-        // Pop the next track
         return queue.shift()!;
     }, []);
 
@@ -284,6 +410,10 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         const trebleFilter = ctx.createBiquadFilter();
         trebleFilter.type = 'lowpass';
         trebleFilter.frequency.value = 24000;
+
+        const duckingGain = ctx.createGain();
+        duckingGain.gain.value = 1.0;
+        duckingGainRef.current = duckingGain;
 
         const elA = new Audio(); elA.crossOrigin = "anonymous"; elA.loop = false;
         const elB = new Audio(); elB.crossOrigin = "anonymous"; elB.loop = false;
@@ -310,7 +440,8 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         gB.connect(bassFilter);
 
         bassFilter.connect(trebleFilter);
-        trebleFilter.connect(ana);
+        trebleFilter.connect(duckingGain);
+        duckingGain.connect(ana);
         ana.connect(ctx.destination);
 
         audioContextRef.current = ctx;
@@ -318,23 +449,137 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         bassFilterRef.current = bassFilter;
         trebleFilterRef.current = trebleFilter;
 
-        if (state.stations.length > 0) {
-            const s = state.stations[0];
-            elA.src = getNextTrack(s.id, s.sourceUrls);
+        if (state.playlists.length > 0) {
+            const s = state.playlists[0];
+            const track = getNextTrack(s.id, s.tracks);
+            elA.src = track.url;
         }
 
         dispatch({ type: 'ADD_LOG', text: 'Broadcast Audio Engine Initialized (Dual-Source)' });
     };
 
+    useEffect(() => {
+        const loadFX = async () => {
+            // @ts-expect-error webkitAudioContext is a legacy Safari feature
+            const Ctx = window.AudioContext || window.webkitAudioContext;
+            const ctx = new Ctx();
+            const buffers: Record<string, AudioBuffer> = {};
+
+            for (const [key, url] of Object.entries(FX_ASSETS)) {
+                try {
+                    const response = await fetch(url);
+                    const arrayBuffer = await response.arrayBuffer();
+                    const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+                    buffers[key] = audioBuffer;
+                } catch (e) {
+                    console.warn(`Failed to load FX: ${key}`, e);
+                }
+            }
+            fxBuffers.current = buffers;
+            console.log('Studio FX Assets Pre-loaded');
+        };
+        loadFX();
+    }, []);
+
+    const triggerFX = useCallback((label: string) => {
+        const ctx = audioContextRef.current;
+        const buffer = fxBuffers.current[label];
+        const ana = analyserRef.current;
+
+        if (!ctx || !buffer || !ana) return;
+
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+
+        const gainNode = ctx.createGain();
+        gainNode.gain.value = 0.8; // SFX slightly lower to not clip
+
+        source.connect(gainNode);
+        gainNode.connect(ana); // Inject directly into analyser for visuals
+
+        source.start(0);
+        console.log(`Triggered SFX: ${label}`);
+    }, []);
+
+    const toggleMic = async () => {
+        if (!audioContextRef.current) initAudio();
+        const ctx = audioContextRef.current!;
+
+        if (state.micActive) {
+            // Disable Mic
+            if (micSourceRef.current) {
+                micSourceRef.current.disconnect();
+                micSourceRef.current = null;
+            }
+            dispatch({ type: 'SET_MIC_ACTIVE', active: false });
+            dispatch({ type: 'ADD_LOG', text: 'Microphone Offline' });
+        } else {
+            // Enable Mic
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const source = ctx.createMediaStreamSource(stream);
+                const g = ctx.createGain();
+                const mAna = ctx.createAnalyser();
+                mAna.fftSize = 32; // Small for just peak detection
+
+                g.gain.value = state.micGain;
+                source.connect(g);
+                g.connect(mAna);
+                g.connect(analyserRef.current!); // Connect to master analyser for visuals
+
+                micSourceRef.current = source;
+                micGainRef.current = g;
+                micAnalyserRef.current = mAna;
+
+                dispatch({ type: 'SET_MIC_ACTIVE', active: true });
+                dispatch({ type: 'ADD_LOG', text: 'Microphone LIVE' });
+            } catch (e) {
+                console.error('Mic access failed', e);
+                dispatch({ type: 'ADD_LOG', text: 'Mic Access Denied', level: 'error' });
+            }
+        }
+    };
+
+    // Auto-Ducking Loop
+    useEffect(() => {
+        if (!state.micActive || !micAnalyserRef.current || !duckingGainRef.current) {
+            // Reset gain if mic inactive
+            if (duckingGainRef.current) {
+                duckingGainRef.current.gain.setTargetAtTime(1.0, audioContextRef.current?.currentTime || 0, 0.1);
+            }
+            return;
+        }
+
+        const mAna = micAnalyserRef.current;
+        const dGain = duckingGainRef.current;
+        const ctx = audioContextRef.current!;
+        const data = new Uint8Array(mAna.frequencyBinCount);
+        let rafId: number;
+
+        const checkDucking = () => {
+            mAna.getByteFrequencyData(data);
+            const peak = Math.max(...data) / 255;
+
+            // If peak > 0.1 (talking), duck the music
+            const targetGain = peak > 0.1 ? (1.0 - state.duckingIntensity) : 1.0;
+            dGain.gain.setTargetAtTime(targetGain, ctx.currentTime, 0.05);
+
+            rafId = requestAnimationFrame(checkDucking);
+        };
+
+        checkDucking();
+        return () => cancelAnimationFrame(rafId);
+    }, [state.micActive, state.duckingIntensity]);
+
     const triggerCrossfadeRef = useRef<(stationId?: string) => Promise<void>>();
 
-    const triggerCrossfade = useCallback(async (targetStationId?: string) => {
+    const triggerCrossfade = useCallback(async (targetStationId?: string, overrideTrack?: Track, isSkipBack?: boolean) => {
         const ctx = audioContextRef.current;
         const currentState = stateRef.current;
         if (!ctx || currentState.status !== 'PLAYING') return;
 
-        const effectiveStationId = targetStationId || currentState.activeStationId;
-        const targetStation = currentState.stations.find((s: Station) => s.id === effectiveStationId);
+        const effectiveStationId = targetStationId || currentState.activePlaylistId;
+        const targetStation = currentState.playlists.find((s: Playlist) => s.id === effectiveStationId);
         if (!targetStation) return;
 
         const currentAudio = activePlayer.current === 'A' ? audioA.current : audioB.current;
@@ -349,9 +594,10 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         console.log(`Crossfading to ${targetStation.name} on Player ${nextPlayerId}`);
         dispatch({ type: 'ADD_LOG', text: `Crossfading to next track in ${targetStation.name}...` });
 
-        // Pull from this station's dedicated shuffle queue
-        const nextTrack = getNextTrack(targetStation.id, targetStation.sourceUrls, currentAudio.src);
-        nextAudio.src = nextTrack;
+        // Fix: Always prioritize the user's manual queue if it exists
+        const manualQueue = stateRef.current.schedule.queue;
+        const nextTrack = overrideTrack || (manualQueue.length > 0 ? manualQueue[0] : getNextTrack(targetStation.id, targetStation.tracks, currentAudio.src));
+        nextAudio.src = nextTrack.url;
 
         // Re-attach listener on new tracks
         nextAudio.onended = () => {
@@ -363,8 +609,7 @@ export function RadioProvider({ children }: { children: ReactNode }) {
 
         try {
             await nextAudio.play();
-
-            const FADE_TIME = 2.0;
+            const FADE_TIME = stateRef.current.crossfadeLength || 2.0;
             const now = ctx.currentTime;
 
             nextGain.gain.linearRampToValueAtTime(1, now + FADE_TIME);
@@ -373,6 +618,39 @@ export function RadioProvider({ children }: { children: ReactNode }) {
             currentGain.gain.linearRampToValueAtTime(0, now + FADE_TIME);
 
             activePlayer.current = nextPlayerId;
+
+            let nextQueue: Track[];
+            let newHistory: Track[];
+
+            if (isSkipBack) {
+                // Skip Back: Push current back to queue, pop from history
+                nextQueue = stateRef.current.schedule.current
+                    ? [stateRef.current.schedule.current, ...stateRef.current.schedule.queue.slice(0, -1)]
+                    : [...stateRef.current.schedule.queue];
+                newHistory = stateRef.current.schedule.history.slice(0, -1);
+            } else {
+                // Skip Forward / Auto: Push current to history, shift queue
+                newHistory = [...stateRef.current.schedule.history];
+                if (stateRef.current.schedule.current) {
+                    newHistory.push(stateRef.current.schedule.current);
+                    if (newHistory.length > 50) newHistory.shift();
+                }
+
+                nextQueue = [...stateRef.current.schedule.queue.slice(1)];
+                const newTrack = getNextTrack(targetStation.id, targetStation.tracks, nextTrack.url);
+                nextQueue.push(newTrack);
+            }
+
+            dispatch({
+                type: 'UPDATE_SCHEDULE',
+                schedule: {
+                    current: nextTrack,
+                    queue: nextQueue,
+                    history: newHistory,
+                    remaining: 180
+                }
+            });
+            dispatch({ type: 'UPDATE_NOW_PLAYING', text: `${nextTrack.title} - ${nextTrack.artist}` });
 
             setTimeout(() => {
                 currentAudio.pause();
@@ -385,6 +663,30 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         }
     }, [dispatch, getNextTrack]);
 
+    const skipNext = useCallback(() => {
+        triggerCrossfade();
+    }, [triggerCrossfade]);
+
+    const skipPrevious = useCallback(() => {
+        const player = activePlayer.current === 'A' ? audioA.current : audioB.current;
+        if (!player) return;
+
+        // If we've played more than 3 seconds, just restart the song
+        if (player.currentTime > 3) {
+            player.currentTime = 0;
+            return;
+        }
+
+        // Otherwise try to go to previous song
+        const history = stateRef.current.schedule.history;
+        if (history.length > 0) {
+            const prevTrack = history[history.length - 1];
+            triggerCrossfade(undefined, prevTrack, true);
+        } else {
+            player.currentTime = 0;
+        }
+    }, [triggerCrossfade]);
+
     useEffect(() => {
         triggerCrossfadeRef.current = triggerCrossfade;
     }, [triggerCrossfade]);
@@ -392,12 +694,12 @@ export function RadioProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         if (state.status !== 'PLAYING') return;
 
-        // Only crossfade if we've actually switched stations
-        if (lastPlayedStationId.current === state.activeStationId) return;
-        lastPlayedStationId.current = state.activeStationId;
+        // Only crossfade if we've actually switched playlists
+        if (lastPlayedStationId.current === state.activePlaylistId) return;
+        lastPlayedStationId.current = state.activePlaylistId;
 
         triggerCrossfade();
-    }, [state.activeStationId, state.status, triggerCrossfade]);
+    }, [state.activePlaylistId, state.status, triggerCrossfade]);
 
     const togglePlay = async () => {
         if (!audioContextRef.current) initAudio();
@@ -413,9 +715,10 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         } else {
             if (player) {
                 if (!player.src) {
-                    const s = state.stations.find((st: Station) => st.id === state.activeStationId);
+                    const s = state.playlists.find((st: Playlist) => st.id === state.activePlaylistId);
                     if (s) {
-                        player.src = getNextTrack(s.id, s.sourceUrls);
+                        const track = getNextTrack(s.id, s.tracks);
+                        player.src = track.url;
 
                         // Ensure auto-play on track end
                         player.onended = () => {
@@ -428,6 +731,12 @@ export function RadioProvider({ children }: { children: ReactNode }) {
 
                 player.play().then(() => {
                     dispatch({ type: 'SET_STATUS', status: 'PLAYING' });
+                    // Sync initial display
+                    const currentStation = state.playlists.find(s => s.id === state.activePlaylistId);
+                    if (currentStation && state.schedule.current) {
+                        const track = state.schedule.current;
+                        dispatch({ type: 'UPDATE_NOW_PLAYING', text: `${track.title} - ${track.artist}` });
+                    }
                 }).catch(() => {
                     dispatch({ type: 'ADD_LOG', text: 'Playback failed.', level: 'error' });
                 });
@@ -445,7 +754,8 @@ export function RadioProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         const interval = setInterval(() => {
-            const newCounts = { ...state.listenerCounts };
+            const currentState = stateRef.current;
+            const newCounts = { ...currentState.listenerCounts };
             let changed = false;
 
             Object.keys(newCounts).forEach(id => {
@@ -459,47 +769,25 @@ export function RadioProvider({ children }: { children: ReactNode }) {
             }
         }, 8000);
         return () => clearInterval(interval);
-    }, [state.listenerCounts]);
+    }, []);
 
     useEffect(() => {
         const id = setInterval(() => {
-            if (state.schedule.remaining > 0) {
+            const currentState = stateRef.current;
+            if (currentState.status !== 'PLAYING') return;
+
+            if (currentState.schedule.remaining > 0) {
                 dispatch({
                     type: 'UPDATE_SCHEDULE',
-                    schedule: { ...state.schedule, remaining: state.schedule.remaining - 1 }
+                    schedule: { ...currentState.schedule, remaining: currentState.schedule.remaining - 1 }
                 });
             } else {
-                const station = state.stations.find((s: Station) => s.id === state.activeStationId);
-                if (station) {
-                    const next = state.schedule.next;
-                    const later = state.schedule.later;
-                    const newLater = station.mockSegments[Math.floor(Math.random() * station.mockSegments.length)];
-
-                    let min = 30, max = 60;
-                    switch (state.programMode) {
-                        case 'Experimental': min = 15; max = 30; break;
-                        case 'Pulse / Groove': min = 25; max = 45; break;
-                        case 'After Hours': min = 60; max = 120; break;
-                        default: min = 45; max = 90;
-                    }
-                    const duration = Math.floor(Math.random() * (max - min)) + min;
-
-                    dispatch({
-                        type: 'UPDATE_SCHEDULE',
-                        schedule: {
-                            current: next,
-                            next: later,
-                            later: newLater,
-                            remaining: duration
-                        }
-                    });
-                    dispatch({ type: 'UPDATE_NOW_PLAYING', text: next });
-                    dispatch({ type: 'ADD_LOG', text: `Block advanced: ${next}` });
-                }
+                // Timer reached zero - trigger a REAL crossfade to keep audio in sync
+                triggerCrossfade();
             }
         }, 1000);
         return () => clearInterval(id);
-    }, [state.schedule, state.activeStationId, state.programMode, state.stations]);
+    }, [getNextTrack, triggerCrossfade]);
 
     useEffect(() => {
         const ctx = audioContextRef.current;
@@ -537,7 +825,11 @@ export function RadioProvider({ children }: { children: ReactNode }) {
                 audioElement: audioA,
                 initAudio,
                 togglePlay,
-                stop
+                stop,
+                triggerFX,
+                toggleMic,
+                skipNext,
+                skipPrevious
             }}>
                 {children}
             </AudioRefsContext.Provider>

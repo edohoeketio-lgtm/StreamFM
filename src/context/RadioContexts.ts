@@ -13,4 +13,8 @@ export const AudioRefsContext = createContext<{
     initAudio: () => void;
     togglePlay: () => void;
     stop: () => void;
+    triggerFX: (label: string) => void;
+    toggleMic: () => void;
+    skipNext: () => void;
+    skipPrevious: () => void;
 } | undefined>(undefined);

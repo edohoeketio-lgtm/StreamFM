@@ -1,5 +1,6 @@
 import { useRadio } from '../../hooks/useRadio';
 import { motion } from 'framer-motion';
+import { Zap } from '../ui/Icons';
 
 export function Header() {
     const { state, dispatch } = useRadio();
@@ -23,6 +24,25 @@ export function Header() {
             </div>
 
             <div className="flex items-center gap-3">
+                {/* Wallet Balance */}
+                <button
+                    onClick={() => dispatch({ type: 'TOGGLE_VAULT' })}
+                    className="flex items-center gap-3 px-4 py-2 rounded-full border border-amber-400/20 bg-amber-400/5 hover:bg-amber-400/10 hover:border-amber-400/40 transition-all group shadow-[0_0_15px_rgba(251,191,36,0.05)]"
+                >
+                    <div className="w-5 h-5 rounded-full bg-amber-400 flex items-center justify-center text-black shadow-[0_0_10px_rgba(251,191,36,0.3)] shrink-0">
+                        <Zap size={12} fill="currentColor" />
+                    </div>
+                    <div className="flex flex-col items-start leading-none gap-0.5">
+                        <div className="flex items-baseline gap-1.5">
+                            <span className="text-[12px] font-black text-white tracking-widest uppercase">{state.wallet.total}</span>
+                            <span className="text-[8px] font-bold text-amber-400/60 tracking-[0.2em] uppercase">HP</span>
+                        </div>
+                        <span className="text-[9px] font-mono font-bold text-white/40">
+                            ${(state.wallet.total / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
+                        </span>
+                    </div>
+                </button>
+
                 {/* Role Toggle */}
                 <button
                     onClick={handleRoleToggle}

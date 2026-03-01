@@ -1,28 +1,23 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRadio, useAudioEngine } from '../../hooks/useRadio';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { ArrowRight } from '../ui/Icons';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Track } from '../../types/radio';
 
 /* ─── Streamer: Queue Manager ─── */
 function QueueManager() {
     const { state, dispatch } = useRadio();
     const { initAudio, togglePlay } = useAudioEngine();
-    const activeStation = state.stations.find(s => s.id === state.activeStationId);
+    const activePlaylist = state.playlists.find((p: { id: string }) => p.id === state.activePlaylistId);
 
-    const [queue, setQueue] = useState<string[]>(activeStation?.mockSegments || []);
     const [showSourceModal, setShowSourceModal] = useState(false);
-
-    useEffect(() => {
-        const station = state.stations.find(s => s.id === state.activeStationId);
-        if (station) setQueue(station.mockSegments);
-    }, [state.activeStationId, state.stations]);
 
     const handleGoLive = async () => {
         initAudio();
-        dispatch({ type: 'SWITCH_STATION', stationId: state.activeStationId });
-        dispatch({ type: 'ADD_LOG', text: `Broadcasting: ${activeStation?.name}. Queue loaded.` });
+        dispatch({ type: 'SWITCH_STATION', stationId: state.activePlaylistId });
+        dispatch({ type: 'ADD_LOG', text: `Broadcasting: ${activePlaylist?.name}. Queue loaded.` });
 
         if (state.status !== 'PLAYING') {
             setTimeout(() => togglePlay(), 50);
@@ -30,7 +25,8 @@ function QueueManager() {
     };
 
     const removeFromQueue = (index: number) => {
-        setQueue(prev => prev.filter((_, i) => i !== index));
+        const newQueue = state.schedule.queue.filter((_: Track, i: number) => i !== index);
+        dispatch({ type: 'REORDER_QUEUE', queue: newQueue });
     };
 
     return (
@@ -40,14 +36,14 @@ function QueueManager() {
                     Live Queue
                 </label>
                 <div className="flex flex-col gap-1.5 mt-2 overflow-y-auto max-h-[240px] pr-1 -mr-1 custom-scrollbar">
-                    {queue.map((track, i) => (
+                    {state.schedule.queue.map((track: Track, i: number) => (
                         <div
-                            key={`${track}-${i}`}
+                            key={track.instanceId || `${track.id}-${i}`}
                             className="flex items-center justify-between p-2.5 rounded-lg border border-card-border/50 hover:border-primary/20 transition-colors group"
                         >
                             <div className="flex items-center gap-3">
                                 <span className="text-[9px] font-mono text-secondary/40 tabular-nums w-4">{String(i + 1).padStart(2, '0')}</span>
-                                <span className="text-xs font-medium text-primary">{track}</span>
+                                <span className="text-xs font-medium text-primary">{track.title} - {track.artist}</span>
                             </div>
                             <button
                                 onClick={() => removeFromQueue(i)}
@@ -111,29 +107,22 @@ function QueueManager() {
 function FrequencyDial() {
     const { state, dispatch } = useRadio();
     const { initAudio, togglePlay } = useAudioEngine();
-    const [selectedId, setSelectedId] = useState(state.activeStationId);
-
-    useEffect(() => {
-        setSelectedId(state.activeStationId);
-    }, [state.activeStationId]);
+    const [selectedId, setSelectedId] = useState(state.activePlaylistId);
 
     const handleTuneIn = async () => {
-        const targetStation = state.stations.find(s => s.id === selectedId);
-        if (!targetStation) return;
+        const targetPlaylist = state.playlists.find((p: { id: string }) => p.id === selectedId);
+        if (!targetPlaylist) return;
 
         initAudio();
         dispatch({ type: 'SWITCH_STATION', stationId: selectedId });
-        dispatch({ type: 'ADD_LOG', text: `Tuned into: ${targetStation.name}. Connecting stream...` });
-
-        const nextSegment = targetStation.mockSegments[Math.floor(Math.random() * targetStation.mockSegments.length)];
-        dispatch({ type: 'UPDATE_NOW_PLAYING', text: nextSegment });
+        dispatch({ type: 'ADD_LOG', text: `Tuned into: ${targetPlaylist.name}. Connecting stream...` });
 
         if (state.status !== 'PLAYING') {
             setTimeout(() => togglePlay(), 50);
         }
     };
 
-    const isAlreadyActive = selectedId === state.activeStationId && state.status === 'PLAYING';
+    const isAlreadyActive = selectedId === state.activePlaylistId && state.status === 'PLAYING';
 
     return (
         <>
@@ -142,15 +131,15 @@ function FrequencyDial() {
                     Live Frequencies
                 </label>
                 <div className="flex flex-col gap-2 mt-2 overflow-y-auto max-h-[280px] pr-1 -mr-1 custom-scrollbar">
-                    {state.stations.map((station) => {
-                        const isSelected = selectedId === station.id;
-                        const isLive = station.id === state.activeStationId && state.status === 'PLAYING';
-                        const count = state.listenerCounts[station.id] || 0;
+                    {state.playlists.map((playlist: { id: string; name: string; description: string; tags: string[] }) => {
+                        const isSelected = selectedId === playlist.id;
+                        const isLive = playlist.id === state.activePlaylistId && state.status === 'PLAYING';
+                        const count = state.listenerCounts[playlist.id] || 0;
 
                         return (
                             <button
-                                key={station.id}
-                                onClick={() => setSelectedId(station.id)}
+                                key={playlist.id}
+                                onClick={() => setSelectedId(playlist.id)}
                                 className={`flex flex-col items-start w-full rounded-lg border px-4 py-3 text-left transition-all ${isSelected
                                     ? 'border-accent bg-accent/10 shadow-sm'
                                     : 'border-card-border hover:border-secondary/30 hover:bg-white/5'
@@ -161,17 +150,17 @@ function FrequencyDial() {
                                         <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse flex-shrink-0" />
                                     )}
                                     <span className={`text-sm font-medium ${isSelected ? 'text-accent' : 'text-primary'}`}>
-                                        {station.name}
+                                        {playlist.name}
                                     </span>
                                     <span className="ml-auto text-[9px] font-mono text-secondary/50 tabular-nums">
                                         {count.toLocaleString()}
                                     </span>
                                 </div>
                                 <span className="text-xs text-secondary truncate w-full">
-                                    {station.description}
+                                    {playlist.description}
                                 </span>
                                 <div className="flex gap-1 mt-1.5">
-                                    {station.tags.map(tag => (
+                                    {playlist.tags.map((tag: string) => (
                                         <span
                                             key={tag}
                                             className={`text-[8px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded-sm ${isSelected

@@ -8,12 +8,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 export function Visualizer() {
     const { state } = useRadio();
-    const { status, bpm, nowPlaying, activeStationId, stations } = state;
+    const { status, bpm, nowPlaying, activePlaylistId } = state;
 
     const { amplitude, waveform } = useAudioReal();
 
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const activeStation = stations.find(s => s.id === activeStationId);
+    const activePlaylist = state.playlists.find((p: { id: string }) => p.id === activePlaylistId);
 
     // Timeline Drawing Loop
     useEffect(() => {
@@ -119,7 +119,7 @@ export function Visualizer() {
                 <div className="flex items-center gap-4">
                     <div className="flex flex-col">
                         <span className="text-[9px] uppercase tracking-[0.2em] text-secondary font-bold opacity-60">Frequency Source</span>
-                        <span className="text-xs font-bold text-primary tracking-wide">{activeStation?.name || 'OFFLINE'}</span>
+                        <span className="text-xs font-bold text-primary tracking-wide">{activePlaylist?.name || 'OFFLINE'}</span>
                     </div>
                 </div>
 
@@ -135,7 +135,7 @@ export function Visualizer() {
                     {/* Listener Count */}
                     <div className="hidden sm:flex items-center gap-1.5 text-[10px] font-mono text-secondary tabular-nums opacity-80">
                         <span className="w-1 h-1 rounded-full bg-primary/20" />
-                        {state.listenerCounts[activeStationId || '']?.toLocaleString() || '---'} listening
+                        {state.listenerCounts[activePlaylistId || '']?.toLocaleString() || '---'} listening
                     </div>
 
                     <div className="w-px h-4 bg-card-border/60 mx-1 hidden sm:block"></div>
@@ -191,11 +191,11 @@ export function Visualizer() {
                     <span className="text-[9px] uppercase text-secondary/60 font-bold tracking-widest mb-2">Up Next</span>
                     <div className="flex flex-col gap-1.5">
                         <div className="flex justify-between items-center text-[10px]">
-                            <span className="text-primary font-medium truncate max-w-[140px]">{state.schedule.next}</span>
+                            <span className="text-primary font-medium truncate max-w-[140px]">{state.schedule.queue[0] ? `${state.schedule.queue[0].title} - ${state.schedule.queue[0].artist}` : '—'}</span>
                             <span className="text-secondary font-mono">{Math.floor(state.schedule.remaining)}s</span>
                         </div>
                         <div className="flex justify-between items-center text-[10px] opacity-60">
-                            <span className="text-primary truncate max-w-[140px]">{state.schedule.later}</span>
+                            <span className="text-primary truncate max-w-[140px]">{state.schedule.queue[1] ? `${state.schedule.queue[1].title} - ${state.schedule.queue[1].artist}` : '—'}</span>
                             <span className="text-secondary font-mono">Later</span>
                         </div>
                     </div>

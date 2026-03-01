@@ -1,5 +1,5 @@
 import { useRadio } from '../../hooks/useRadio';
-import { type ProgramMode } from '../../types/radio';
+import { type ProgramMode, type Track } from '../../types/radio';
 import { Card } from '../ui/Card';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -59,7 +59,7 @@ function BroadcastMode() {
 function ScheduleView() {
     const { state } = useRadio();
     const { schedule } = state;
-    const activeStation = state.stations.find(s => s.id === state.activeStationId);
+    const activePlaylist = state.playlists.find((p: { id: string }) => p.id === state.activePlaylistId);
 
     const formatTime = (secs: number) => {
         const m = Math.floor(secs / 60);
@@ -67,10 +67,13 @@ function ScheduleView() {
         return `${m}:${String(s).padStart(2, '0')}`;
     };
 
+    const nextTrack: Track | undefined = schedule.queue[0];
+    const laterTrack: Track | undefined = schedule.queue[1];
+
     return (
         <>
             <p className="text-xs text-primary/60 mb-3">
-                {activeStation ? `${activeStation.name} — Schedule` : 'Select a station to see the schedule'}
+                {activePlaylist ? `${activePlaylist.name} — Schedule` : 'Select a station to see the schedule'}
             </p>
             <div className="flex flex-col gap-2">
                 {/* Current */}
@@ -79,24 +82,30 @@ function ScheduleView() {
                         <span className="text-[10px] uppercase tracking-widest font-bold text-white/60">Now Playing</span>
                         <span className="text-[10px] font-mono text-white/60">{formatTime(schedule.remaining)}</span>
                     </div>
-                    <span className="text-sm font-semibold">{schedule.current}</span>
+                    <span className="text-sm font-semibold">
+                        {schedule.current ? `${schedule.current.title} - ${schedule.current.artist}` : 'Nothing playing'}
+                    </span>
                 </div>
                 {/* Up Next */}
                 <div className="p-3 rounded-lg border border-card-border">
                     <span className="text-[10px] uppercase tracking-widest font-bold text-secondary/50 block mb-1">Up Next</span>
-                    <span className="text-xs font-medium text-primary">{schedule.next}</span>
+                    <span className="text-xs font-medium text-primary">
+                        {nextTrack ? `${nextTrack.title} - ${nextTrack.artist}` : '—'}
+                    </span>
                 </div>
                 {/* Later */}
                 <div className="p-3 rounded-lg border border-card-border/50 opacity-60">
                     <span className="text-[10px] uppercase tracking-widest font-bold text-secondary/50 block mb-1">Later</span>
-                    <span className="text-xs font-medium text-primary/60">{schedule.later}</span>
+                    <span className="text-xs font-medium text-primary/60">
+                        {laterTrack ? `${laterTrack.title} - ${laterTrack.artist}` : '—'}
+                    </span>
                 </div>
             </div>
 
             <div className="p-3 bg-white/5 rounded border border-card-border mt-4">
                 <p className="text-xs text-primary/60">
                     <strong className="block text-primary/80 mb-1">Currently Tuned</strong>
-                    {activeStation?.name || 'No station selected'}
+                    {activePlaylist?.name || 'No station selected'}
                 </p>
             </div>
         </>

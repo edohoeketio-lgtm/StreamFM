@@ -35,7 +35,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
                 ref={ref}
                 whileTap={{ scale: 0.98 }}
                 className={cn(baseStyles, variants[variant], sizes[size], className)}
-                {...props as any}
+                {...(props as React.ComponentPropsWithoutRef<typeof motion.button>)}
             >
                 {isLoading ? (
                     <span className="animate-spin mr-2">⟳</span>
