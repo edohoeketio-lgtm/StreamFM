@@ -264,9 +264,9 @@ function SourceLinkerModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
                 url: t.url
             }));
 
-            dispatch({ type: 'CREATE_PLAYLIST', name: playlist.name });
+            dispatch({ type: 'CREATE_PLAYLIST', name: playlist.name, tracks });
             dispatch({ type: 'ADD_TO_LIBRARY', tracks });
-            dispatch({ type: 'ADD_LOG', text: `✅ Imported "${playlist.name}" — ${tracks.length} tracks with previews` });
+            dispatch({ type: 'ADD_LOG', text: `✅ Imported "${playlist.name}" — ${tracks.length} tracks added to library` });
 
             setImportingId(null);
             onClose();

@@ -134,7 +134,7 @@ export type RadioAction =
     | { type: 'SET_MIC_GAIN'; gain: number }
     | { type: 'SET_DUCKING'; intensity: number }
     | { type: 'REORDER_QUEUE'; queue: Track[] }
-    | { type: 'CREATE_PLAYLIST'; name: string }
+    | { type: 'CREATE_PLAYLIST'; name: string; tracks?: Track[] }
     | { type: 'ADD_TO_LIBRARY'; tracks: Track[] }
     | { type: 'ADD_TO_PLAYLIST'; playlistId: string; track: Track }
     | { type: 'REORDER_PLAYLIST'; playlistId: string; tracks: Track[] }

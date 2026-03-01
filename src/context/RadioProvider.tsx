@@ -170,7 +170,7 @@ function radioReducer(state: RadioState, action: RadioAction): RadioState {
                 id: Math.random().toString(36).substr(2, 9),
                 name: action.name,
                 description: 'User created playlist',
-                tracks: [],
+                tracks: action.tracks || [],
                 tags: ['User']
             };
             return { ...state, playlists: [...state.playlists, newPlaylist] };

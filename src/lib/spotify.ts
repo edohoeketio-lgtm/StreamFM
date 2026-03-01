@@ -153,22 +153,27 @@ export const SpotifyService = {
     /**
      * Step 5: Fetch tracks from a specific playlist
      */
-    fetchPlaylistTracks: async (token: string, playlistId: string): Promise<{ id: string; title: string; artist: string; url: string; duration: number }[]> => {
+    fetchPlaylistTracks: async (token: string, playlistId: string): Promise<{ id: string; title: string; artist: string; url: string; duration: number; previewUrl?: string }[]> => {
         try {
             const response = await fetchWithRetry(`https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
             const data = await response.json();
-            return data.items
-                .filter((item: { track: { id: string; preview_url: string | null } | null }) => item.track && item.track.preview_url)
-                .map((item: { track: { id: string; name: string; artists: { name: string }[]; preview_url: string; duration_ms: number } }) => ({
-                    id: item.track.id,
-                    title: item.track.name,
-                    artist: item.track.artists.map(a => a.name).join(', '),
-                    url: item.track.preview_url,
-                    duration: Math.round(item.track.duration_ms / 1000)
-                }));
+            return (data?.items || [])
+                .filter((item: Record<string, unknown>) => item && item.track && (item.track as Record<string, unknown>).id)
+                .map((item: Record<string, unknown>) => {
+                    const track = item.track as Record<string, unknown>;
+                    const artists = (track.artists as { name: string }[] | undefined) || [];
+                    return {
+                        id: track.id as string,
+                        title: (track.name as string) || 'Unknown Track',
+                        artist: artists.map(a => a.name).join(', ') || 'Unknown Artist',
+                        url: (track.preview_url as string) || (track.external_urls as { spotify?: string })?.spotify || (track.uri as string) || '',
+                        duration: Math.round(((track.duration_ms as number) || 0) / 1000),
+                        previewUrl: (track.preview_url as string) || undefined
+                    };
+                });
         } catch (err) {
             console.error('Spotify Fetch Tracks Failed:', err);
             return [];
