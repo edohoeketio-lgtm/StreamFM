@@ -157,8 +157,9 @@ export const SpotifyService = {
      */
     fetchPlaylistTracks: async (token: string, playlistId: string): Promise<{ id: string; title: string; artist: string; url: string; duration: number; previewUrl?: string }[]> => {
         try {
-            // Use the main playlist endpoint (which includes tracks) instead of the tracks sub-endpoint
-            const response = await fetchWithRetry(`https://api.spotify.com/v1/playlists/${playlistId}`, {
+            // Use the main playlist endpoint with explicit fields to ensure tracks are returned
+            const fields = 'tracks.items(track(id,name,artists,preview_url,external_urls,uri,duration_ms))';
+            const response = await fetchWithRetry(`https://api.spotify.com/v1/playlists/${playlistId}?fields=${fields}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
@@ -180,7 +181,7 @@ export const SpotifyService = {
                         previewUrl: (track.preview_url as string) || undefined
                     };
                 });
-        } catch (err: any) {
+        } catch (err) {
             console.error('Spotify Fetch Tracks Failed:', err);
             // Re-throw so the UI can log it to the app log
             throw err;
