@@ -157,15 +157,37 @@ export const SpotifyService = {
      */
     fetchPlaylistTracks: async (token: string, playlistId: string): Promise<{ id: string; title: string; artist: string; url: string; duration: number; previewUrl?: string }[]> => {
         try {
-            // Use the main playlist endpoint with explicit fields to ensure tracks are returned
-            const fields = 'tracks.items(track(id,name,artists,preview_url,external_urls,uri,duration_ms))';
-            const response = await fetchWithRetry(`https://api.spotify.com/v1/playlists/${playlistId}?fields=${fields}`, {
+            // Try the standard tracks endpoint first as it's the most reliable for full lists
+            const response = await fetchWithRetry(`https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
             const data = await response.json();
-            const items = data?.tracks?.items || [];
-            if (items.length > 0) console.log('[Spotify Debug] First track item:', JSON.stringify(items[0], null, 2));
+            const items = data?.items || [];
+
+            if (items.length === 0) {
+                console.warn('[Spotify] No tracks found via /tracks endpoint, trying fallback via main playlist object...');
+                const plResponse = await fetchWithRetry(`https://api.spotify.com/v1/playlists/${playlistId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const plData = await plResponse.json();
+                if (plData?.tracks?.items) {
+                    return plData.tracks.items
+                        .filter((item: Record<string, unknown>) => (item?.track as Record<string, unknown>)?.id)
+                        .map((item: Record<string, unknown>) => {
+                            const track = item.track as Record<string, unknown>;
+                            const artists = (track.artists as { name: string }[] | undefined) || [];
+                            return {
+                                id: track.id as string,
+                                title: (track.name as string) || 'Unknown',
+                                artist: artists.map(a => a.name).join(', ') || 'Unknown',
+                                url: (track.preview_url as string) || (track.external_urls as { spotify?: string })?.spotify || (track.uri as string) || '',
+                                duration: Math.round(((track.duration_ms as number) || 0) / 1000),
+                                previewUrl: (track.preview_url as string) || undefined
+                            };
+                        });
+                }
+            }
 
             return items
                 .filter((item: Record<string, unknown>) => item && item.track && (item.track as Record<string, unknown>).id)
@@ -183,7 +205,9 @@ export const SpotifyService = {
                 });
         } catch (err) {
             console.error('Spotify Fetch Tracks Failed:', err);
-            // Re-throw so the UI can log it to the app log
+            if (err instanceof Error && err.message.includes('403')) {
+                throw new Error('Spotify Access Denied (403). If you just added your email to the allowlist, please DISCONNECT and CONNECT Spotify again to refresh your session.');
+            }
             throw err;
         }
     }
