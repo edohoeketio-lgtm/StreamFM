@@ -157,12 +157,13 @@ export const SpotifyService = {
      */
     fetchPlaylistTracks: async (token: string, playlistId: string): Promise<{ id: string; title: string; artist: string; url: string; duration: number; previewUrl?: string }[]> => {
         try {
-            const response = await fetchWithRetry(`https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100`, {
+            // Use the main playlist endpoint (which includes tracks) instead of the tracks sub-endpoint
+            const response = await fetchWithRetry(`https://api.spotify.com/v1/playlists/${playlistId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
             const data = await response.json();
-            const items = data?.items || [];
+            const items = data?.tracks?.items || [];
             if (items.length > 0) console.log('[Spotify Debug] First track item:', JSON.stringify(items[0], null, 2));
 
             return items
