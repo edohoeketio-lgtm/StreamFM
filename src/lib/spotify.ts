@@ -110,16 +110,16 @@ export const SpotifyService = {
 
             const data = await response.json();
             const items = data?.items || [];
-            if (items.length > 0) console.log('[Spotify Debug] First playlist item:', JSON.stringify(items[0], null, 2));
 
             return items
                 .filter((p: Record<string, unknown> | null) => p && p.id)
                 .map((p: Record<string, unknown>) => {
-                    const tracks = p.tracks as { total?: number } | undefined;
+                    // Spotify API returns track count as either tracks.total or items.total
+                    const tracksObj = (p.tracks || p.items) as { total?: number } | undefined;
                     return {
                         id: p.id as string,
                         name: p.name as string,
-                        tracksCount: tracks?.total ?? (p as { total_tracks?: number }).total_tracks ?? 0,
+                        tracksCount: tracksObj?.total ?? 0,
                         imageUrl: ((p.images as { url: string }[] | undefined)?.[0]?.url) || ''
                     };
                 });
