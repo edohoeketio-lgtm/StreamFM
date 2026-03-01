@@ -109,12 +109,14 @@ export const SpotifyService = {
             });
 
             const data = await response.json();
-            return data.items.map((p: { id: string; name: string; tracks: { total: number }; images: { url: string }[] }) => ({
-                id: p.id,
-                name: p.name,
-                tracksCount: p.tracks.total,
-                imageUrl: p.images?.[0]?.url || ''
-            }));
+            return (data.items || [])
+                .filter((p: { id: string } | null) => p && p.id)
+                .map((p: { id: string; name: string; tracks?: { total: number }; images?: { url: string }[] }) => ({
+                    id: p.id,
+                    name: p.name,
+                    tracksCount: p.tracks?.total ?? 0,
+                    imageUrl: p.images?.[0]?.url || ''
+                }));
         } catch (err) {
             console.error('Spotify Fetch Playlists Failed:', err);
             throw err;
@@ -128,12 +130,14 @@ export const SpotifyService = {
             });
 
             const data = await response.json();
-            return data.playlists.items.map((p: { id: string; name: string; tracks: { total: number }; images: { url: string }[] }) => ({
-                id: p.id,
-                name: p.name,
-                tracksCount: p.tracks.total,
-                imageUrl: p.images?.[0]?.url || ''
-            }));
+            return (data.playlists?.items || [])
+                .filter((p: { id: string } | null) => p && p.id)
+                .map((p: { id: string; name: string; tracks?: { total: number }; images?: { url: string }[] }) => ({
+                    id: p.id,
+                    name: p.name,
+                    tracksCount: p.tracks?.total ?? 0,
+                    imageUrl: p.images?.[0]?.url || ''
+                }));
         } catch (err) {
             console.error('Spotify Search Failed:', err);
             return [];
