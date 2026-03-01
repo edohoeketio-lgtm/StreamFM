@@ -109,14 +109,20 @@ export const SpotifyService = {
             });
 
             const data = await response.json();
-            return (data.items || [])
-                .filter((p: { id: string } | null) => p && p.id)
-                .map((p: { id: string; name: string; tracks?: { total: number }; images?: { url: string }[] }) => ({
-                    id: p.id,
-                    name: p.name,
-                    tracksCount: p.tracks?.total ?? 0,
-                    imageUrl: p.images?.[0]?.url || ''
-                }));
+            const items = data?.items || [];
+            if (items.length > 0) console.log('[Spotify Debug] First playlist item:', JSON.stringify(items[0], null, 2));
+
+            return items
+                .filter((p: Record<string, unknown> | null) => p && p.id)
+                .map((p: Record<string, unknown>) => {
+                    const tracks = p.tracks as { total?: number } | undefined;
+                    return {
+                        id: p.id as string,
+                        name: p.name as string,
+                        tracksCount: tracks?.total ?? (p as { total_tracks?: number }).total_tracks ?? 0,
+                        imageUrl: ((p.images as { url: string }[] | undefined)?.[0]?.url) || ''
+                    };
+                });
         } catch (err) {
             console.error('Spotify Fetch Playlists Failed:', err);
             throw err;

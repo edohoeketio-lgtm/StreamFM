@@ -389,7 +389,7 @@ function SourceLinkerModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
                                                     )}
                                                     <div className="flex flex-col items-start gap-1 text-left">
                                                         <span className="text-xs font-bold text-white/60 tracking-tight group-hover:text-white transition-colors">{p.name}</span>
-                                                        {p.tracksCount && <span className="text-[8px] font-mono text-white/55 uppercase">{p.tracksCount} Tracks</span>}
+                                                        {p.tracksCount > 0 ? <span className="text-[8px] font-mono text-white/55 uppercase">{p.tracksCount} Tracks</span> : null}
                                                     </div>
                                                 </div>
                                                 <ChevronRight size={14} className="text-white/35 group-hover:text-accent group-hover:translate-x-1 transition-all" />
