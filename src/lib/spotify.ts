@@ -9,7 +9,7 @@ import { SpotifyPlaylist } from '../types/radio';
 // 1. Create an app at https://developer.spotify.com/dashboard
 // 2. Add 'http://localhost:5174/streamer' to Redirect URIs (update port if necessary)
 // 3. Paste Client ID below:
-const CLIENT_ID = ''; // <--- USER: PASTE YOUR CLIENT ID HERE
+const CLIENT_ID = 'f109553d49db42a6970785a579eda1d7';
 export const hasSpotifyClientId = !!CLIENT_ID;
 const REDIRECT_URI = window.location.origin + window.location.pathname;
 const AUTH_ENDPOINT = 'https://accounts.spotify.com/authorize';
