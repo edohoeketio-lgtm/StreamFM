@@ -11,7 +11,7 @@ import { SpotifyPlaylist } from '../types/radio';
 // 3. Paste Client ID below:
 const CLIENT_ID = 'f109553d49db42a6970785a579eda1d7';
 export const hasSpotifyClientId = !!CLIENT_ID;
-const REDIRECT_URI = window.location.origin + window.location.pathname;
+const REDIRECT_URI = window.location.origin + '/streamer';
 const AUTH_ENDPOINT = 'https://accounts.spotify.com/authorize';
 const TOKEN_ENDPOINT = 'https://accounts.spotify.com/api/token';
 
@@ -136,6 +136,31 @@ export const SpotifyService = {
             }));
         } catch (err) {
             console.error('Spotify Search Failed:', err);
+            return [];
+        }
+    },
+
+    /**
+     * Step 5: Fetch tracks from a specific playlist
+     */
+    fetchPlaylistTracks: async (token: string, playlistId: string): Promise<{ id: string; title: string; artist: string; url: string; duration: number }[]> => {
+        try {
+            const response = await fetchWithRetry(`https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            const data = await response.json();
+            return data.items
+                .filter((item: { track: { id: string; preview_url: string | null } | null }) => item.track && item.track.preview_url)
+                .map((item: { track: { id: string; name: string; artists: { name: string }[]; preview_url: string; duration_ms: number } }) => ({
+                    id: item.track.id,
+                    title: item.track.name,
+                    artist: item.track.artists.map(a => a.name).join(', '),
+                    url: item.track.preview_url,
+                    duration: Math.round(item.track.duration_ms / 1000)
+                }));
+        } catch (err) {
+            console.error('Spotify Fetch Tracks Failed:', err);
             return [];
         }
     }

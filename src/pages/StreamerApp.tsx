@@ -190,11 +190,13 @@ function StudioFader({ id, label, value, onDoubleClick, className }: { id: strin
    ═══════════════════════════════════════════════════════════════ */
 
 function SourceLinkerModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
-    const { state, dispatch } = useRadio();
-    const [step, setStep] = useState<'source' | 'search' | 'connecting'>('source');
-    const [selectedSource, setSelectedSource] = useState<string | null>(null);
+    const { dispatch } = useRadio();
+    const spotifyToken = localStorage.getItem('spotify_access_token');
+    const [step, setStep] = useState<'source' | 'search' | 'connecting' | 'importing'>(spotifyToken ? 'connecting' : 'source');
+    const [selectedSource, setSelectedSource] = useState<string | null>(spotifyToken ? 'spotify' : null);
     const [playlists, setPlaylists] = useState<SpotifyPlaylist[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
+    const [importingId, setImportingId] = useState<string | null>(null);
 
     const sources = [
         { id: 'spotify', name: 'Spotify', icon: '💿' },
@@ -205,12 +207,22 @@ function SourceLinkerModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
 
     const handleSelectSource = async (id: string) => {
         setSelectedSource(id);
-
         if (id === 'spotify') {
-            await SpotifyService.authorize();
+            if (spotifyToken) {
+                setStep('connecting');
+                try {
+                    const fetched = await SpotifyService.fetchPlaylists(spotifyToken);
+                    setPlaylists(fetched);
+                    setStep('search');
+                } catch {
+                    localStorage.removeItem('spotify_access_token');
+                    await SpotifyService.authorize();
+                }
+            } else {
+                await SpotifyService.authorize();
+            }
         } else if (id === 'local') {
             onClose();
-            // We'll handle folder ingest via a callback or event
             window.dispatchEvent(new CustomEvent('trigger-folder-ingest'));
         } else {
             setStep('connecting');
@@ -218,43 +230,59 @@ function SourceLinkerModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
         }
     };
 
-    // Real-time search if connected
     useEffect(() => {
-        if (selectedSource === 'spotify' && searchQuery.length > 2) {
-            const spotifySource = state.playlists.find(s => s.id === state.activePlaylistId)
-                ?.linkedSources?.find(src => src.type === 'spotify');
-
-            if (spotifySource?.accessToken) {
-                const timeout = setTimeout(() => {
-                    SpotifyService.searchPlaylists(spotifySource.accessToken!, searchQuery)
-                        .then(setPlaylists)
-                        .catch(console.error);
-                }, 500);
-                return () => clearTimeout(timeout);
-            }
+        if (selectedSource === 'spotify' && searchQuery.length > 2 && spotifyToken) {
+            const timeout = setTimeout(() => {
+                SpotifyService.searchPlaylists(spotifyToken, searchQuery)
+                    .then(setPlaylists)
+                    .catch(console.error);
+            }, 500);
+            return () => clearTimeout(timeout);
         }
-    }, [searchQuery, selectedSource, state.playlists, state.activePlaylistId]);
+    }, [searchQuery, selectedSource, spotifyToken]);
 
     const filteredPlaylists = playlists.filter(p =>
         p.name.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    const handleSelectPlaylist = (playlist: SpotifyPlaylist) => {
-        dispatch({ type: 'ADD_LOG', text: `Ingested Spotify Playlist: ${playlist.name} ` });
-        onClose();
+    const handleSelectPlaylist = async (playlist: SpotifyPlaylist) => {
+        if (!spotifyToken) return;
+        setImportingId(playlist.id);
+        setStep('importing');
+        dispatch({ type: 'ADD_LOG', text: `Importing "${playlist.name}" from Spotify...` });
+
+        try {
+            const spotifyTracks = await SpotifyService.fetchPlaylistTracks(spotifyToken, playlist.id);
+            const tracks: Track[] = spotifyTracks.map(t => ({
+                id: t.id,
+                instanceId: `${t.id}-${Math.random().toString(36).substr(2, 9)}`,
+                title: t.title,
+                artist: t.artist,
+                bpm: 120,
+                url: t.url
+            }));
+
+            dispatch({ type: 'CREATE_PLAYLIST', name: playlist.name });
+            dispatch({ type: 'ADD_TO_LIBRARY', tracks });
+            dispatch({ type: 'ADD_LOG', text: `✅ Imported "${playlist.name}" — ${tracks.length} tracks with previews` });
+
+            setImportingId(null);
+            onClose();
+        } catch (err) {
+            console.error('Import failed:', err);
+            dispatch({ type: 'ADD_LOG', text: `Failed to import "${playlist.name}"`, level: 'error' });
+            setImportingId(null);
+            setStep('search');
+        }
     };
 
-    // Auto-fetch playlists if already connected
     useEffect(() => {
-        const spotifySource = state.playlists.find(s => s.id === state.activePlaylistId)
-            ?.linkedSources?.find(src => src.type === 'spotify');
-
-        if (spotifySource?.connected && spotifySource.accessToken && playlists.length === 0) {
-            SpotifyService.fetchPlaylists(spotifySource.accessToken)
-                .then(setPlaylists)
-                .catch(console.error);
+        if (isOpen && spotifyToken && playlists.length === 0) {
+            SpotifyService.fetchPlaylists(spotifyToken)
+                .then(fetched => { setPlaylists(fetched); setStep('search'); })
+                .catch(() => { localStorage.removeItem('spotify_access_token'); setStep('source'); });
         }
-    }, [state.playlists, state.activePlaylistId, playlists.length]);
+    }, [isOpen, spotifyToken, playlists.length]);
 
     return (
         <AnimatePresence>
@@ -266,16 +294,16 @@ function SourceLinkerModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
                         exit={{ opacity: 0, scale: 0.95, y: 20 }}
                         className="w-full max-w-2xl bg-[#080808] border border-white/5 rounded-3xl overflow-hidden flex flex-col shadow-[0_0_100px_rgba(0,0,0,0.8)]"
                     >
-                        {/* Header */}
                         <div className="p-8 border-b border-white/5 flex justify-between items-center">
                             <div className="flex flex-col gap-1">
                                 <h2 className="text-[10px] font-black tracking-[0.5em] uppercase text-white/85">Music Source Ingest</h2>
-                                <p className="text-[8px] font-mono text-accent/60 uppercase">DDS-LINK NODE: ACTIVE</p>
+                                <p className="text-[8px] font-mono text-accent/60 uppercase">
+                                    {spotifyToken ? 'SPOTIFY: CONNECTED' : 'DDS-LINK NODE: READY'}
+                                </p>
                             </div>
                             <button onClick={onClose} className="text-white/55 hover:text-white transition-colors">✕</button>
                         </div>
 
-                        {/* Content */}
                         <div className="p-12 min-h-[400px] flex flex-col justify-center">
                             {step === 'source' && (
                                 <div className="grid grid-cols-2 gap-4">
@@ -285,12 +313,17 @@ function SourceLinkerModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
                                             onClick={() => handleSelectSource(s.id)}
                                             className="group flex flex-col items-start p-8 rounded-2xl border border-white/5 bg-white/[0.01] hover:bg-white/[0.03] hover:border-white/10 transition-all text-left relative"
                                         >
-                                            {s.id === 'spotify' && !hasSpotifyClientId && (
+                                            {s.id === 'spotify' && spotifyToken && (
+                                                <div className="absolute top-4 right-4 text-[9px] font-black text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full border border-emerald-400/20 tracking-widest uppercase">Connected</div>
+                                            )}
+                                            {s.id === 'spotify' && !hasSpotifyClientId && !spotifyToken && (
                                                 <div className="absolute top-4 right-4 text-[9px] font-black text-accent bg-accent/10 px-2 py-0.5 rounded-full border border-accent/20 tracking-widest uppercase">Setup Required</div>
                                             )}
                                             <span className="text-3xl mb-6 grayscale group-hover:grayscale-0 transition-all">{s.icon}</span>
                                             <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/70 group-hover:text-white transition-colors">{s.name}</span>
-                                            <span className="text-[8px] font-bold text-white/35 uppercase mt-2">Connect Account</span>
+                                            <span className="text-[8px] font-bold text-white/35 uppercase mt-2">
+                                                {s.id === 'spotify' && spotifyToken ? 'Browse Library' : 'Connect Account'}
+                                            </span>
                                         </button>
                                     ))}
                                 </div>
@@ -303,8 +336,21 @@ function SourceLinkerModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
                                         <Zap className="text-accent" size={24} />
                                     </div>
                                     <div className="flex flex-col items-center gap-2">
-                                        <span className="text-sm font-bold text-white uppercase tracking-widest">Handshaking with {selectedSource}...</span>
-                                        <span className="text-[8px] font-mono text-white/55 uppercase tracking-[0.4em]">Establishing Secure DDS_Tunnel</span>
+                                        <span className="text-sm font-bold text-white uppercase tracking-widest">Loading your library...</span>
+                                        <span className="text-[8px] font-mono text-white/55 uppercase tracking-[0.4em]">Fetching playlists from Spotify</span>
+                                    </div>
+                                </div>
+                            )}
+
+                            {step === 'importing' && (
+                                <div className="flex flex-col items-center gap-8 py-12">
+                                    <div className="w-16 h-16 rounded-full border border-emerald-400/20 flex items-center justify-center relative">
+                                        <div className="absolute inset-0 rounded-full border-t border-emerald-400 animate-spin" />
+                                        <span className="text-2xl">🎵</span>
+                                    </div>
+                                    <div className="flex flex-col items-center gap-2">
+                                        <span className="text-sm font-bold text-white uppercase tracking-widest">Importing tracks...</span>
+                                        <span className="text-[8px] font-mono text-emerald-400/60 uppercase tracking-[0.4em]">Fetching preview URLs</span>
                                     </div>
                                 </div>
                             )}
@@ -317,28 +363,28 @@ function SourceLinkerModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
                                             autoFocus
                                             value={searchQuery}
                                             onChange={(e) => setSearchQuery(e.target.value)}
-                                            placeholder={`SEARCH ${selectedSource?.toUpperCase()} DATABASE...`}
+                                            placeholder="SEARCH YOUR SPOTIFY LIBRARY..."
                                             className="w-full bg-white/[0.02] border border-white/5 rounded-2xl py-6 pl-16 pr-8 text-sm font-medium text-white placeholder:text-white/35 outline-none focus:border-accent/40 transition-all"
                                         />
                                     </div>
 
-                                    <div className="flex flex-col gap-2">
+                                    <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto custom-scrollbar pr-2">
                                         <span className="text-[9px] font-black uppercase tracking-[0.3em] text-white/35 ml-2">
-                                            {selectedSource === 'spotify' ? 'Your Library' : 'Suggested Playlists'}
+                                            Your Playlists ({filteredPlaylists.length})
                                         </span>
-                                        {(selectedSource === 'spotify' ? filteredPlaylists : [
-                                            { id: 'm1', name: 'High Frequency Night', tracksCount: 42 },
-                                            { id: 'm2', name: 'Midnight FM Selects', tracksCount: 128 },
-                                            { id: 'm3', name: 'Digital Horizon', tracksCount: 65 },
-                                            { id: 'm4', name: 'Submerged Rhythms', tracksCount: 33 }
-                                        ] as SpotifyPlaylist[]).map(p => (
+                                        {filteredPlaylists.map(p => (
                                             <button
                                                 key={p.id}
                                                 onClick={() => handleSelectPlaylist(p)}
-                                                className="flex items-center justify-between p-5 rounded-xl border border-white/[0.03] bg-white/[0.01] hover:bg-white/[0.03] transition-all group"
+                                                disabled={importingId === p.id}
+                                                className="flex items-center justify-between p-5 rounded-xl border border-white/[0.03] bg-white/[0.01] hover:bg-white/[0.03] transition-all group disabled:opacity-50"
                                             >
                                                 <div className="flex items-center gap-4">
-                                                    <div className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center text-white/55 font-bold text-xs uppercase">{p.name.charAt(0)}</div>
+                                                    {p.imageUrl ? (
+                                                        <img src={p.imageUrl} alt="" className="w-10 h-10 rounded-lg object-cover" />
+                                                    ) : (
+                                                        <div className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center text-white/55 font-bold text-xs uppercase">{p.name.charAt(0)}</div>
+                                                    )}
                                                     <div className="flex flex-col items-start gap-1 text-left">
                                                         <span className="text-xs font-bold text-white/60 tracking-tight group-hover:text-white transition-colors">{p.name}</span>
                                                         {p.tracksCount && <span className="text-[8px] font-mono text-white/55 uppercase">{p.tracksCount} Tracks</span>}
@@ -347,15 +393,24 @@ function SourceLinkerModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
                                                 <ChevronRight size={14} className="text-white/35 group-hover:text-accent group-hover:translate-x-1 transition-all" />
                                             </button>
                                         ))}
+                                        {filteredPlaylists.length === 0 && (
+                                            <div className="py-12 flex flex-col items-center gap-2">
+                                                <span className="text-[9px] font-bold text-white/20 uppercase tracking-widest">No playlists found</span>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             )}
                         </div>
 
-                        {/* Footer Info */}
                         <div className="p-8 bg-black/40 border-t border-white/5 flex justify-between items-center text-[8px] font-mono font-bold text-white/35 uppercase tracking-[0.3em]">
-                            <span>Status: API_BRIDGE_OK</span>
-                            <span>Node: XTC_SECURE_EXT_v1</span>
+                            <span>Status: {spotifyToken ? 'AUTHENTICATED' : 'AWAITING_AUTH'}</span>
+                            <button
+                                onClick={() => { setStep('source'); setPlaylists([]); setSearchQuery(''); }}
+                                className="hover:text-accent transition-colors"
+                            >
+                                ← Back to Sources
+                            </button>
                         </div>
                     </motion.div>
                 </div>
@@ -363,6 +418,9 @@ function SourceLinkerModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
         </AnimatePresence>
     );
 }
+
+
+
 
 // ─── GO LIVE COUNTDOWN ─── */
 function GoLiveCountdown({ onComplete }: { onComplete: () => void }) {
@@ -818,40 +876,80 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
 
                 {/* PLAYLISTS */}
                 <div className="px-6 mt-auto pb-10 border-t border-white/5 pt-8">
-                    <h3 className="text-[9px] font-black uppercase tracking-[0.2em] text-white/25 mb-6 px-2">Playlists</h3>
-                    <div className="grid grid-cols-1 gap-1.5 overflow-y-auto custom-scrollbar max-h-40 pr-2">
-                        {playlists.map(playlist => {
-                            const isActive = playlist.id === state.activePlaylistId;
-                            return (
-                                <button
-                                    key={playlist.id}
-                                    onClick={() => {
-                                        initAudio();
-                                        dispatch({ type: 'SWITCH_PLAYLIST', playlistId: playlist.id });
-                                        if (state.status !== 'PLAYING') setTimeout(() => togglePlay(), 50);
-                                    }}
-                                    className={cn(
-                                        "w-full text-left py-3 px-4 rounded-md transition-all group border flex items-center justify-between",
-                                        isActive
-                                            ? "bg-accent/5 border-accent/20"
-                                            : "bg-transparent border-transparent hover:bg-white/[0.02]"
-                                    )}
-                                >
-                                    <span className={cn(
-                                        "text-[10px] font-bold tracking-tight truncate",
-                                        isActive ? "text-accent" : "text-white/40 group-hover:text-white/70"
-                                    )}>
-                                        {playlist.name}
-                                    </span>
-                                    {isActive ? (
-                                        <div className="w-1 h-1 rounded-full bg-accent animate-pulse" />
-                                    ) : (
-                                        <span className="text-[8px] font-mono text-white/10 group-hover:text-white/20 uppercase">{playlist.tracks.length} TRKS</span>
-                                    )}
-                                </button>
-                            );
-                        })}
+                    <div className="flex items-center justify-between mb-6 px-2">
+                        <h3 className="text-[9px] font-black uppercase tracking-[0.2em] text-white/25">Playlists</h3>
+                        <button
+                            onClick={() => {
+                                const name = prompt('Playlist name:');
+                                if (name && name.trim()) {
+                                    dispatch({ type: 'CREATE_PLAYLIST', name: name.trim() });
+                                    dispatch({ type: 'ADD_LOG', text: `Created playlist: ${name.trim()}` });
+                                }
+                            }}
+                            className="text-[8px] font-black uppercase tracking-[0.2em] text-accent hover:text-white transition-colors px-2 py-1 rounded border border-accent/20 hover:border-accent/50 bg-accent/5"
+                        >
+                            + New
+                        </button>
                     </div>
+
+                    {playlists.length === 0 ? (
+                        <div className="px-4 py-10 border border-dashed border-white/10 rounded-md flex flex-col items-center justify-center gap-3 bg-white/[0.01]">
+                            <span className="text-[20px]">🎵</span>
+                            <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-white/25 text-center">No playlists yet</span>
+                            <button
+                                onClick={() => {
+                                    const name = prompt('Name your first playlist:');
+                                    if (name && name.trim()) {
+                                        dispatch({ type: 'CREATE_PLAYLIST', name: name.trim() });
+                                        dispatch({ type: 'ADD_LOG', text: `Created playlist: ${name.trim()}` });
+                                    }
+                                }}
+                                className="text-[9px] font-black uppercase tracking-[0.15em] text-black bg-accent px-4 py-2 rounded-sm hover:bg-accent/90 transition-colors"
+                            >
+                                Create Playlist
+                            </button>
+                            <button
+                                onClick={() => onOpenLinker()}
+                                className="text-[8px] font-bold uppercase tracking-[0.15em] text-accent/60 hover:text-accent transition-colors"
+                            >
+                                Or import from Spotify
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 gap-1.5 overflow-y-auto custom-scrollbar max-h-48 pr-2">
+                            {playlists.map(playlist => {
+                                const isActive = playlist.id === state.activePlaylistId;
+                                return (
+                                    <button
+                                        key={playlist.id}
+                                        onClick={() => {
+                                            initAudio();
+                                            dispatch({ type: 'SWITCH_PLAYLIST', playlistId: playlist.id });
+                                            if (state.status !== 'PLAYING') setTimeout(() => togglePlay(), 50);
+                                        }}
+                                        className={cn(
+                                            "w-full text-left py-3 px-4 rounded-md transition-all group border flex items-center justify-between",
+                                            isActive
+                                                ? "bg-accent/5 border-accent/20"
+                                                : "bg-transparent border-transparent hover:bg-white/[0.02]"
+                                        )}
+                                    >
+                                        <span className={cn(
+                                            "text-[10px] font-bold tracking-tight truncate",
+                                            isActive ? "text-accent" : "text-white/40 group-hover:text-white/70"
+                                        )}>
+                                            {playlist.name}
+                                        </span>
+                                        {isActive ? (
+                                            <div className="w-1 h-1 rounded-full bg-accent animate-pulse" />
+                                        ) : (
+                                            <span className="text-[8px] font-mono text-white/10 group-hover:text-white/20 uppercase">{playlist.tracks.length} TRKS</span>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
             </div>
         </aside>
@@ -1200,19 +1298,17 @@ function StudioLayout() {
                 dispatch({ type: 'ADD_LOG', text: 'Spotify Handshake: Exchanging code...' });
                 try {
                     const { token } = await SpotifyService.exchangeCode(code);
-                    const playlists = await SpotifyService.fetchPlaylists(token);
 
-                    dispatch({
-                        type: 'CONNECT_SPOTIFY',
-                        playlistId: state.activePlaylistId,
-                        token,
-                        playlists
-                    });
+                    // Store the token so the SourceLinkerModal can use it
+                    localStorage.setItem('spotify_access_token', token);
 
-                    dispatch({ type: 'ADD_LOG', text: `Spotify Linked: ${playlists.length} playlists ingested.` });
+                    dispatch({ type: 'ADD_LOG', text: `✅ Spotify Connected! Open Music Source to browse your library.` });
 
                     // Clean the URL to remove the code
                     window.history.replaceState({}, document.title, window.location.pathname);
+
+                    // Auto-open the linker so user can pick playlists
+                    setIsLinkerOpen(true);
                 } catch (err) {
                     console.error('Spotify Auth Error:', err);
                     dispatch({ type: 'ADD_LOG', text: 'Spotify Link Failed.', level: 'error' });

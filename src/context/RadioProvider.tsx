@@ -2,14 +2,6 @@ import { useReducer, useEffect, useRef, useCallback, type ReactNode } from 'reac
 import { RadioContext, AudioRefsContext } from './RadioContexts';
 import { RadioState, RadioAction, Playlist, MusicSource, Track } from '../types/radio';
 
-const ALL_TRACKS: Track[] = [
-    { id: 'bk-1', instanceId: 'bk-1-init', title: 'Birds & the Bees', artist: 'Baby Keem', bpm: 124, url: '/audio/Birds & the Bees - Baby Keem.mp3' },
-    { id: 'bk-2', instanceId: 'bk-2-init', title: 'Good Flirts', artist: 'Baby Keem', bpm: 118, url: '/audio/Good Flirts - Baby Keem.mp3' },
-    { id: 'vp-1', instanceId: 'vp-1-init', title: 'Perfect Enemy', artist: 'Vinnie Paz', bpm: 92, url: '/audio/Perfect Enemy - Vinnie Paz.mp3' },
-    { id: 'jc-1', instanceId: 'jc-1-init', title: 'Poor Thang', artist: 'J. Cole', bpm: 88, url: '/audio/Poor Thang - J. Cole.mp3' },
-    { id: 'sm-1', instanceId: 'sm-1-init', title: 'Sexy Music', artist: 'Unknown', bpm: 120, url: '/audio/sexy music..mp3' },
-];
-
 const FX_ASSETS: Record<string, string> = {
     AIRHORN: 'https://assets.mixkit.co/sfx/preview/mixkit-stadium-air-horn-loud-and-clear-1123.mp3',
     REWIND: 'https://assets.mixkit.co/sfx/preview/mixkit-tape-rewind-vibration-2023.mp3',
@@ -17,64 +9,12 @@ const FX_ASSETS: Record<string, string> = {
     HYPE: 'https://assets.mixkit.co/sfx/preview/mixkit-cinematic-impact-braam-sound-2542.mp3'
 };
 
-const DEFAULT_PLAYLISTS: Playlist[] = [
-    {
-        id: 'feel-good-1',
-        name: 'Feel-Good',
-        description: 'Vibes for a good time',
-        tracks: ALL_TRACKS,
-        tags: ['Vibe', 'Happy', 'Soul']
-    },
-    {
-        id: 'lofi-1',
-        name: 'Lo-Fi Hip Hop',
-        description: 'Quality hip-hop and chill beats',
-        tracks: ALL_TRACKS.filter(t => t.bpm < 100),
-        tags: ['Chill', 'Study', 'Beats']
-    },
-    {
-        id: 'techno-1',
-        name: 'Minimal Techno',
-        description: 'Deep driving minimal techno, 128bpm',
-        tracks: ALL_TRACKS.filter(t => t.bpm >= 120),
-        tags: ['Techno', 'Minimal', 'Dark']
-    },
-    {
-        id: 'jazz-1',
-        name: 'Jazz Fusion',
-        description: 'Upbeat Jazz Fusion with complex solos',
-        tracks: ALL_TRACKS,
-        tags: ['Jazz', 'Fusion', 'Funk']
-    },
-    {
-        id: 'afro-1',
-        name: 'Afrobeat',
-        description: 'Energetic Afrobeat rhythms',
-        tracks: ALL_TRACKS,
-        tags: ['Afrobeat', 'Ryhthm', 'Brass']
-    },
-    {
-        id: 'synth-1',
-        name: 'Synthwave',
-        description: 'Retro 80s Synthwave, neon lights',
-        tracks: ALL_TRACKS.filter(t => t.bpm >= 110),
-        tags: ['Retro', 'Synth', '80s']
-    },
-    {
-        id: 'ambient-1',
-        name: 'Ambient',
-        description: 'Ethereal soundscapes',
-        tracks: ALL_TRACKS,
-        tags: ['Ambient', 'Drone', 'Sleep']
-    }
-];
-
 const initialState: RadioState = {
     status: 'IDLE',
     broadcastStatus: 'STANDBY',
     role: 'listener',
     apiKey: '',
-    prompt: 'Feel-Good',
+    prompt: '',
     bpm: 120,
     density: 1.0,
     brightness: 1.0,
@@ -86,25 +26,17 @@ const initialState: RadioState = {
     scale: 'Minor',
     programMode: 'Continuous Flow',
 
-    activePlaylistId: DEFAULT_PLAYLISTS[0].id,
-    nowPlaying: 'Ready. Select a playlist...',
-    playlists: DEFAULT_PLAYLISTS,
-    library: ALL_TRACKS,
+    activePlaylistId: '',
+    nowPlaying: 'Create a playlist to get started...',
+    playlists: [],
+    library: [],
 
-    listenerCounts: {
-        'feel-good-1': 1204,
-        'lofi-1': 892,
-        'techno-1': 456,
-        'jazz-1': 1402,
-        'afro-1': 210,
-        'synth-1': 567,
-        'ambient-1': 329
-    },
+    listenerCounts: {},
     schedule: {
-        current: ALL_TRACKS[0],
-        queue: ALL_TRACKS.slice(1, 4),
+        current: null,
+        queue: [],
         history: [],
-        remaining: 180
+        remaining: 0
     },
 
     logs: [],
@@ -114,12 +46,9 @@ const initialState: RadioState = {
     micGain: 1.0,
     duckingIntensity: 0.6,
     wallet: {
-        total: 1250,
+        total: 0,
         session: 0,
-        history: [
-            { id: 'h1', user: 'CyberPunk', amount: 50, item: 'Digital Vinyl', ts: new Date(Date.now() - 3600000) },
-            { id: 'h2', user: 'RaveMaster', amount: 100, item: 'Gold Mic', ts: new Date(Date.now() - 7200000) }
-        ],
+        history: [],
         isVaultOpen: false
     },
     crossfadeLength: 2.0
