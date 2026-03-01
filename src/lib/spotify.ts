@@ -18,7 +18,9 @@ const TOKEN_ENDPOINT = 'https://accounts.spotify.com/api/token';
 const SCOPES = [
     'user-read-private',
     'playlist-read-private',
-    'playlist-read-collaborative'
+    'playlist-read-collaborative',
+    'user-library-read',
+    'user-top-read'
 ];
 
 /**
@@ -160,7 +162,10 @@ export const SpotifyService = {
             });
 
             const data = await response.json();
-            return (data?.items || [])
+            const items = data?.items || [];
+            if (items.length > 0) console.log('[Spotify Debug] First track item:', JSON.stringify(items[0], null, 2));
+
+            return items
                 .filter((item: Record<string, unknown>) => item && item.track && (item.track as Record<string, unknown>).id)
                 .map((item: Record<string, unknown>) => {
                     const track = item.track as Record<string, unknown>;
@@ -174,9 +179,10 @@ export const SpotifyService = {
                         previewUrl: (track.preview_url as string) || undefined
                     };
                 });
-        } catch (err) {
+        } catch (err: any) {
             console.error('Spotify Fetch Tracks Failed:', err);
-            return [];
+            // Re-throw so the UI can log it to the app log
+            throw err;
         }
     }
 };
