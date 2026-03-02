@@ -1,4 +1,5 @@
 import { useReducer, useEffect, useRef, useCallback, type ReactNode } from 'react';
+import { YoutubeService } from '../lib/youtube';
 import { RadioContext, AudioRefsContext } from './RadioContexts';
 import { RadioState, RadioAction, Playlist, MusicSource, Track } from '../types/radio';
 
@@ -394,6 +395,24 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         return queue.shift();
     }, []);
 
+    const resolveAudioStream = async (track: Track): Promise<string> => {
+        // If it's a blob (local) or already a valid Spotify preview, return as is
+        if (track.url.startsWith('blob:') || track.url.startsWith('data:') || track.url.includes('p.scdn.co')) {
+            return track.url;
+        }
+
+        // Otherwise, it's a Spotify track missing a preview
+        dispatch({ type: 'ADD_LOG', text: `Resolving full song for: ${track.title}` });
+        const result = await YoutubeService.resolveTrack(track.title, track.artist || 'Unknown Artist');
+
+        if (result?.url) {
+            dispatch({ type: 'ADD_LOG', text: `Resolved via YouTube: ${track.title}` });
+            return result.url;
+        }
+
+        return track.url; // Fallback to original
+    };
+
     const initAudio = () => {
         if (audioContextRef.current) return;
 
@@ -624,12 +643,13 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         }
 
         // Use the same helper for dynamic crossOrigin
-        if (nextTrack.url.startsWith('blob:') || nextTrack.url.startsWith('data:')) {
+        const resolvedUrl = await resolveAudioStream(nextTrack);
+        if (resolvedUrl.startsWith('blob:') || resolvedUrl.startsWith('data:')) {
             nextAudio.removeAttribute('crossorigin');
         } else {
             nextAudio.crossOrigin = 'anonymous';
         }
-        nextAudio.src = nextTrack.url;
+        nextAudio.src = resolvedUrl;
 
         // Re-attach listener on new tracks
         nextAudio.onended = () => {
@@ -761,12 +781,13 @@ export function RadioProvider({ children }: { children: ReactNode }) {
                             return;
                         }
 
-                        if (track.url.startsWith('blob:') || track.url.startsWith('data:')) {
+                        const resolvedUrl = await resolveAudioStream(track);
+                        if (resolvedUrl.startsWith('blob:') || resolvedUrl.startsWith('data:')) {
                             player.removeAttribute('crossorigin');
                         } else {
                             player.crossOrigin = 'anonymous';
                         }
-                        player.src = track.url;
+                        player.src = resolvedUrl;
 
                         // Ensure auto-play on track end
                         player.onended = () => {
