@@ -875,22 +875,21 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
                 {/* TRACKLIST (LIBRARY) */}
                 <div className="px-6 mb-10 overflow-hidden">
                     <h3 className="text-[9px] font-black uppercase tracking-[0.2em] text-white/25 mb-4 px-2">Project Tracklist</h3>
-                    <div className="space-y-1">
+                    <div className="space-y-2">
                         {library.map((track) => (
                             <div
                                 key={track.id}
-                                className="flex items-center gap-3 px-3 py-2 bg-white/[0.01] hover:bg-white/[0.03] rounded-sm transition-all group cursor-pointer"
+                                className="flex items-center gap-4 px-4 py-3 bg-white/[0.02] border border-white/5 hover:border-white/10 hover:bg-white/[0.04] rounded-md transition-all group cursor-pointer"
                                 onClick={() => {
-                                    // Quick add to queue for now
                                     dispatch({ type: 'ADD_TO_PLAYLIST', playlistId: state.activePlaylistId, track });
                                 }}
                             >
-                                <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-                                    <span className="text-[9px] font-bold text-white/60 truncate group-hover:text-white transition-colors">{track.title}</span>
-                                    <span className="text-[7px] font-medium text-white/20 uppercase tracking-tighter">{track.artist}</span>
+                                <div className="flex flex-col gap-1 flex-1 min-w-0">
+                                    <span className="text-[10px] font-bold text-white/70 truncate group-hover:text-white transition-colors">{track.title}</span>
+                                    <span className="text-[8px] font-medium text-white/20 uppercase tracking-tighter">{track.artist}</span>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    <span className="text-[7px] font-mono text-white/10">{track.bpm}</span>
+                                <div className="flex items-center gap-3">
+                                    <span className="text-[8px] font-mono text-white/10">{track.bpm}</span>
                                     <button
                                         onClick={(e) => {
                                             e.stopPropagation();
@@ -898,7 +897,7 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
                                                 dispatch({ type: 'REMOVE_FROM_LIBRARY', trackId: track.id });
                                             }
                                         }}
-                                        className="opacity-0 group-hover:opacity-100 p-1 text-white/10 hover:text-red-400 transition-colors"
+                                        className="opacity-0 group-hover:opacity-100 p-1 text-white/15 hover:text-red-400 transition-colors"
                                         title="Delete from library"
                                     >
                                         ✕
