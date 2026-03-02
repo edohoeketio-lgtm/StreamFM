@@ -255,6 +255,39 @@ function radioReducer(state: RadioState, action: RadioAction): RadioState {
                 ...state,
                 crossfadeLength: action.length
             };
+        case 'REMOVE_FROM_QUEUE': {
+            const newQueue = state.schedule.queue.filter(t => t.instanceId !== action.instanceId);
+            return {
+                ...state,
+                schedule: { ...state.schedule, queue: newQueue }
+            };
+        }
+        case 'REMOVE_FROM_PLAYLIST': {
+            const updatedPlaylists = state.playlists.map(p => {
+                if (p.id === action.playlistId) {
+                    return { ...p, tracks: p.tracks.filter(t => t.instanceId !== action.instanceId) };
+                }
+                return p;
+            });
+            return { ...state, playlists: updatedPlaylists };
+        }
+        case 'REMOVE_FROM_LIBRARY': {
+            const newLibrary = state.library.filter(t => t.id !== action.trackId);
+            // Also remove from all playlists for consistency
+            const updatedPlaylists = state.playlists.map(p => ({
+                ...p,
+                tracks: p.tracks.filter(t => t.id !== action.trackId)
+            }));
+            // Also remove from queue
+            const newQueue = state.schedule.queue.filter(t => t.id !== action.trackId);
+
+            return {
+                ...state,
+                library: newLibrary,
+                playlists: updatedPlaylists,
+                schedule: { ...state.schedule, queue: newQueue }
+            };
+        }
         default:
             return state;
     }
@@ -344,8 +377,17 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         duckingGain.gain.value = 1.0;
         duckingGainRef.current = duckingGain;
 
-        const elA = new Audio(); elA.crossOrigin = "anonymous"; elA.loop = false;
-        const elB = new Audio(); elB.crossOrigin = "anonymous"; elB.loop = false;
+        const elA = new Audio(); elA.loop = false;
+        const elB = new Audio(); elB.loop = false;
+
+        const applyAudioSrc = (el: HTMLAudioElement, url: string) => {
+            if (url.startsWith('blob:') || url.startsWith('data:')) {
+                el.removeAttribute('crossorigin');
+            } else {
+                el.crossOrigin = 'anonymous';
+            }
+            el.src = url;
+        };
 
         audioA.current = elA;
         audioB.current = elB;
@@ -381,7 +423,7 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         if (state.playlists.length > 0) {
             const s = state.playlists[0];
             const track = getNextTrack(s.id, s.tracks);
-            elA.src = track.url;
+            applyAudioSrc(elA, track.url);
         }
 
         dispatch({ type: 'ADD_LOG', text: 'Broadcast Audio Engine Initialized (Dual-Source)' });
@@ -526,6 +568,13 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         // Fix: Always prioritize the user's manual queue if it exists
         const manualQueue = stateRef.current.schedule.queue;
         const nextTrack = overrideTrack || (manualQueue.length > 0 ? manualQueue[0] : getNextTrack(targetStation.id, targetStation.tracks, currentAudio.src));
+
+        // Use the same helper for dynamic crossOrigin
+        if (nextTrack.url.startsWith('blob:') || nextTrack.url.startsWith('data:')) {
+            nextAudio.removeAttribute('crossorigin');
+        } else {
+            nextAudio.crossOrigin = 'anonymous';
+        }
         nextAudio.src = nextTrack.url;
 
         // Re-attach listener on new tracks
@@ -647,6 +696,12 @@ export function RadioProvider({ children }: { children: ReactNode }) {
                     const s = state.playlists.find((st: Playlist) => st.id === state.activePlaylistId);
                     if (s) {
                         const track = getNextTrack(s.id, s.tracks);
+
+                        if (track.url.startsWith('blob:') || track.url.startsWith('data:')) {
+                            player.removeAttribute('crossorigin');
+                        } else {
+                            player.crossOrigin = 'anonymous';
+                        }
                         player.src = track.url;
 
                         // Ensure auto-play on track end

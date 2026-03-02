@@ -213,9 +213,10 @@ export const SpotifyService = {
         }
 
         const mapped = items
-            .filter((item) => (item?.track as Record<string, unknown>)?.id)
             .map((item) => {
-                const track = item.track as Record<string, unknown>;
+                const track = (item.track || item) as Record<string, unknown>;
+                if (!track || !track.id) return null;
+
                 const artists = (track.artists as { name: string }[] | undefined) || [];
                 return {
                     id: track.id as string,
@@ -225,9 +226,13 @@ export const SpotifyService = {
                     duration: Math.round(((track.duration_ms as number) || 0) / 1000),
                     previewUrl: (track.preview_url as string) || undefined
                 };
-            });
+            })
+            .filter((t): t is NonNullable<typeof t> => t !== null);
 
         console.log(`[Spotify Debug] Final Mapped Result: ${mapped.length} tracks`);
+        if (mapped.length === 0 && items.length > 0) {
+            console.log('[Spotify Debug] FAILED TO MAP ITEMS. Item structure sample:', JSON.stringify(items[0]).substring(0, 300));
+        }
         return mapped;
     }
 };

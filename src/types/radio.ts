@@ -141,4 +141,7 @@ export type RadioAction =
     | { type: 'SWITCH_PLAYLIST'; playlistId: string }
     | { type: 'DEPOSIT_HYPE'; amount: number; user: string; item: string }
     | { type: 'TOGGLE_VAULT'; open?: boolean }
-    | { type: 'SET_CROSSFADE_LENGTH'; length: number };
+    | { type: 'SET_CROSSFADE_LENGTH'; length: number }
+    | { type: 'REMOVE_FROM_QUEUE'; instanceId: string }
+    | { type: 'REMOVE_FROM_PLAYLIST'; playlistId: string; instanceId: string }
+    | { type: 'REMOVE_FROM_LIBRARY'; trackId: string };

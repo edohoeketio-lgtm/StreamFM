@@ -851,6 +851,16 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
                                     <span className="text-[8px] font-medium text-white/35 truncate uppercase tracking-tighter">{track.artist}</span>
                                 </div>
                                 <span className="text-[8px] font-mono text-white/20 group-hover:text-accent/80 transition-colors pointer-events-none">{track.bpm}</span>
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        dispatch({ type: 'REMOVE_FROM_QUEUE', instanceId: track.instanceId || '' });
+                                    }}
+                                    className="opacity-0 group-hover:opacity-100 p-2 text-white/20 hover:text-red-400 transition-all"
+                                    title="Remove from queue"
+                                >
+                                    ✕
+                                </button>
                             </Reorder.Item>
                         ))}
                     </Reorder.Group>
@@ -879,7 +889,21 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
                                     <span className="text-[9px] font-bold text-white/60 truncate group-hover:text-white transition-colors">{track.title}</span>
                                     <span className="text-[7px] font-medium text-white/20 uppercase tracking-tighter">{track.artist}</span>
                                 </div>
-                                <span className="text-[7px] font-mono text-white/10">{track.bpm}</span>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[7px] font-mono text-white/10">{track.bpm}</span>
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (confirm(`Delete "${track.title}" from library?`)) {
+                                                dispatch({ type: 'REMOVE_FROM_LIBRARY', trackId: track.id });
+                                            }
+                                        }}
+                                        className="opacity-0 group-hover:opacity-100 p-1 text-white/10 hover:text-red-400 transition-colors"
+                                        title="Delete from library"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
                             </div>
                         ))}
                     </div>
