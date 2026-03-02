@@ -396,25 +396,36 @@ export function RadioProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const resolveAudioStream = useCallback(async (track: Track): Promise<string> => {
-        // If it's a blob (local) or already a valid Spotify preview, return as is
-        if (track.url.startsWith('blob:') || track.url.startsWith('data:') || track.url.includes('p.scdn.co')) {
+        // Local files (blob/data) should play as is
+        if (track.url.startsWith('blob:') || track.url.startsWith('data:')) {
             return track.url;
         }
 
         // Check if we've already resolved this (cache)
         const cached = YoutubeService.getCachedResolution(track.title, track.artist || 'Unknown Artist');
-        if (cached) return cached;
-
-        // Otherwise, it's a Spotify track missing a preview
-        dispatch({ type: 'ADD_LOG', text: `Resolving full song for: ${track.title}` });
-        const result = await YoutubeService.resolveTrack(track.title, track.artist || 'Unknown Artist');
-
-        if (result?.url) {
-            dispatch({ type: 'ADD_LOG', text: `Resolved via YouTube: ${track.title}` });
-            return result.url;
+        if (cached) {
+            console.log(`[Audio Engine] Using cached YouTube stream for: ${track.title}`);
+            return cached;
         }
 
-        return track.url; // Fallback to original
+        // For Spotify tracks (even if they have a preview_url), we resolve via YouTube
+        // to get the FULL song and avoid geoblocking/token issues.
+        dispatch({ type: 'ADD_LOG', text: `Resolving full song: ${track.title}` });
+
+        try {
+            const result = await YoutubeService.resolveTrack(track.title, track.artist || 'Unknown Artist');
+            if (result?.url) {
+                dispatch({ type: 'ADD_LOG', text: `Playing full song via YouTube match: ${track.title}` });
+                return result.url;
+            }
+        } catch (error) {
+            console.error('[Audio Engine] YouTube Resolution Failed:', error);
+        }
+
+        // Final fallback: use the original URL (Spotify preview or webpage link)
+        // If this reaches here and then fails with Ref: 4, it's definitely a source restriction issue.
+        dispatch({ type: 'ADD_LOG', text: `Fallback to Spotify source for: ${track.title}`, level: 'warn' });
+        return track.url;
     }, []);
 
     const applyAudioSrc = useCallback(async (el: HTMLAudioElement, track: Track) => {
@@ -501,14 +512,6 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         analyserRef.current = ana;
         bassFilterRef.current = bassFilter;
         trebleFilterRef.current = trebleFilter;
-
-        if (state.playlists.length > 0) {
-            const s = state.playlists[0];
-            const track = getNextTrack(s.id, s.tracks);
-            if (track) {
-                applyAudioSrc(elA, track);
-            }
-        }
 
         dispatch({ type: 'ADD_LOG', text: 'Broadcast Audio Engine Initialized (Dual-Source)' });
     };
@@ -789,13 +792,11 @@ export function RadioProvider({ children }: { children: ReactNode }) {
                 if (!player.src) {
                     const s = state.playlists.find((st: Playlist) => st.id === state.activePlaylistId);
                     if (s) {
-                        const track = getNextTrack(s.id, s.tracks);
-
+                        const track = state.schedule.current || getNextTrack(s.id, s.tracks);
                         if (!track) {
                             dispatch({ type: 'ADD_LOG', text: 'Nothing to play in this project.', level: 'error' });
                             return;
                         }
-
                         await applyAudioSrc(player, track);
 
                         // Ensure auto-play on track end
