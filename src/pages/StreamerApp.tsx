@@ -309,23 +309,33 @@ function SourceLinkerModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
                             {step === 'source' && (
                                 <div className="grid grid-cols-2 gap-4">
                                     {sources.map(s => (
-                                        <button
-                                            key={s.id}
-                                            onClick={() => handleSelectSource(s.id)}
-                                            className="group flex flex-col items-start p-8 rounded-2xl border border-white/5 bg-white/[0.01] hover:bg-white/[0.03] hover:border-white/10 transition-all text-left relative"
-                                        >
+                                        <div className="relative group">
+                                            <button
+                                                key={s.id}
+                                                onClick={() => handleSelectSource(s.id)}
+                                                className="w-full group flex flex-col items-start p-8 rounded-2xl border border-white/5 bg-white/[0.01] hover:bg-white/[0.03] hover:border-white/10 transition-all text-left relative"
+                                            >
+                                                {s.id === 'spotify' && spotifyToken && (
+                                                    <div className="absolute top-4 right-4 text-[9px] font-black text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full border border-emerald-400/20 tracking-widest uppercase">Connected</div>
+                                                )}
+                                                {s.id === 'spotify' && !hasSpotifyClientId && !spotifyToken && (
+                                                    <div className="absolute top-4 right-4 text-[9px] font-black text-accent bg-accent/10 px-2 py-0.5 rounded-full border border-accent/20 tracking-widest uppercase">Setup Required</div>
+                                                )}
+                                                <span className="text-3xl mb-6 grayscale group-hover:grayscale-0 transition-all">{s.icon}</span>
+                                                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/70 group-hover:text-white transition-colors">{s.name}</span>
+                                                <span className="text-[8px] font-bold text-white/35 uppercase mt-2">
+                                                    {s.id === 'spotify' && spotifyToken ? 'Browse Library' : 'Connect Account'}
+                                                </span>
+                                            </button>
                                             {s.id === 'spotify' && spotifyToken && (
-                                                <div className="absolute top-4 right-4 text-[9px] font-black text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full border border-emerald-400/20 tracking-widest uppercase">Connected</div>
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); localStorage.removeItem('spotify_access_token'); window.location.reload(); }}
+                                                    className="absolute bottom-4 right-4 text-[8px] font-black uppercase tracking-widest text-white/20 hover:text-red-400 transition-colors bg-white/5 px-2 py-1 rounded-md"
+                                                >
+                                                    Disconnect
+                                                </button>
                                             )}
-                                            {s.id === 'spotify' && !hasSpotifyClientId && !spotifyToken && (
-                                                <div className="absolute top-4 right-4 text-[9px] font-black text-accent bg-accent/10 px-2 py-0.5 rounded-full border border-accent/20 tracking-widest uppercase">Setup Required</div>
-                                            )}
-                                            <span className="text-3xl mb-6 grayscale group-hover:grayscale-0 transition-all">{s.icon}</span>
-                                            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/70 group-hover:text-white transition-colors">{s.name}</span>
-                                            <span className="text-[8px] font-bold text-white/35 uppercase mt-2">
-                                                {s.id === 'spotify' && spotifyToken ? 'Browse Library' : 'Connect Account'}
-                                            </span>
-                                        </button>
+                                        </div>
                                     ))}
                                 </div>
                             )}
