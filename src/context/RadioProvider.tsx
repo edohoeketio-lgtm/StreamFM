@@ -377,6 +377,7 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         }
 
         const queue = stationQueues.current[stationId];
+        if (!queue || queue.length === 0) return null as any;
 
         // Always check: if the next track is the currently playing song, skip it
         if (currentUrl && queue.length > 1) {
@@ -387,7 +388,7 @@ export function RadioProvider({ children }: { children: ReactNode }) {
             }
         }
 
-        return queue.shift()!;
+        return queue.shift();
     }, []);
 
     const initAudio = () => {
@@ -611,6 +612,12 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         const manualQueue = stateRef.current.schedule.queue;
         const nextTrack = overrideTrack || (manualQueue.length > 0 ? manualQueue[0] : getNextTrack(targetStation.id, targetStation.tracks, currentAudio.src));
 
+        if (!nextTrack) {
+            console.warn('[Audio Engine] No next track available for crossfade');
+            dispatch({ type: 'ADD_LOG', text: 'No tracks in current project. Ingest more music to continue.', level: 'error' });
+            return;
+        }
+
         // Use the same helper for dynamic crossOrigin
         if (nextTrack.url.startsWith('blob:') || nextTrack.url.startsWith('data:')) {
             nextAudio.removeAttribute('crossorigin');
@@ -741,6 +748,11 @@ export function RadioProvider({ children }: { children: ReactNode }) {
                     const s = state.playlists.find((st: Playlist) => st.id === state.activePlaylistId);
                     if (s) {
                         const track = getNextTrack(s.id, s.tracks);
+
+                        if (!track) {
+                            dispatch({ type: 'ADD_LOG', text: 'Nothing to play in this project.', level: 'error' });
+                            return;
+                        }
 
                         if (track.url.startsWith('blob:') || track.url.startsWith('data:')) {
                             player.removeAttribute('crossorigin');

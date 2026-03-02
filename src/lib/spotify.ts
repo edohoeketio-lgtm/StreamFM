@@ -258,9 +258,11 @@ export const SpotifyService = {
             })
             .filter((t): t is NonNullable<typeof t> => t !== null);
 
-        console.log(`[Spotify Debug] Final Mapped Result: ${mapped.length} tracks`);
-        if (mapped.length === 0 && items.length > 0) {
-            console.log('[Spotify Debug] FAILED TO MAP ITEMS. Item structure sample:', JSON.stringify(items[0]).substring(0, 300));
+        console.log(`[Spotify Debug] Final Mapped Result: ${mapped.length} tracks (from ${items.length} items)`);
+        if (items.length > 0 && mapped.length === 0) {
+            console.error('[Spotify Debug] CRITICAL MAPPING FAILURE. Spotify returned items, but none matched the track schema.');
+            console.log('[Spotify Debug] FULL RAW ACCESS: ', items[0]);
+            console.log('[Spotify Debug] Check if "track" property exists:', !!items[0].track);
         }
         return mapped;
     }
