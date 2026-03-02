@@ -100,15 +100,20 @@ function radioReducer(state: RadioState, action: RadioAction): RadioState {
                 instanceId: t.instanceId || `${t.id}-${Math.random().toString(36).substr(2, 9)}`
             }));
 
+            const initialTrack = tracksWithInstances[0];
+            const nowPlaying = initialTrack
+                ? (initialTrack.artist && initialTrack.artist !== 'Unknown Artist' ? `${initialTrack.title} - ${initialTrack.artist}` : initialTrack.title)
+                : playlist.name;
+
             return {
                 ...state,
                 activePlaylistId: action.playlistId,
                 prompt: playlist.name,
-                nowPlaying: playlist.name,
+                nowPlaying,
                 schedule: {
-                    current: tracksWithInstances[0] || null,
-                    queue: tracksWithInstances.slice(1, 4), // Take next few
-                    history: [], // Reset history on playlist switch
+                    current: initialTrack || null,
+                    queue: tracksWithInstances.slice(1, 10), // Increase queue visibility
+                    history: [],
                     remaining: 180
                 }
             };
@@ -173,10 +178,16 @@ function radioReducer(state: RadioState, action: RadioAction): RadioState {
                 tracks: action.tracks || [],
                 tags: ['User']
             };
+            const firstTrack = action.tracks?.[0];
+            const nowPlaying = state.activePlaylistId
+                ? state.nowPlaying
+                : (firstTrack ? (firstTrack.artist && firstTrack.artist !== 'Unknown Artist' ? `${firstTrack.title} - ${firstTrack.artist}` : firstTrack.title) : action.name);
+
             return {
                 ...state,
                 playlists: [...state.playlists, newPlaylist],
-                activePlaylistId: state.activePlaylistId || newPlaylist.id // Auto-activate if none
+                activePlaylistId: state.activePlaylistId || newPlaylist.id, // Auto-activate if none
+                nowPlaying
             };
         }
         case 'ADD_TO_LIBRARY': {
@@ -219,11 +230,16 @@ function radioReducer(state: RadioState, action: RadioAction): RadioState {
                 }
             }
 
+            const finalNowPlaying = (!state.schedule.current || state.nowPlaying === 'Create a playlist to get started...')
+                ? (trackWithInstance.artist && trackWithInstance.artist !== 'Unknown Artist' ? `${trackWithInstance.title} - ${trackWithInstance.artist}` : trackWithInstance.title)
+                : state.nowPlaying;
+
             return {
                 ...state,
                 playlists: updatedPlaylists,
                 schedule: newSchedule,
-                activePlaylistId: state.activePlaylistId || (targetPlaylistId as string)
+                activePlaylistId: state.activePlaylistId || (targetPlaylistId as string),
+                nowPlaying: finalNowPlaying
             };
         }
         case 'REORDER_PLAYLIST': {
