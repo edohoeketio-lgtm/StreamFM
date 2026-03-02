@@ -396,47 +396,57 @@ export function RadioProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const resolveAudioStream = useCallback(async (track: Track): Promise<string> => {
+        if (!track) return '';
+
         // Local files (blob/data) should play as is
         if (track.url.startsWith('blob:') || track.url.startsWith('data:')) {
             return track.url;
         }
 
-        // Check if we've already resolved this (cache)
+        // Check cache first
         const cached = YoutubeService.getCachedResolution(track.title, track.artist || 'Unknown Artist');
-        if (cached) {
-            console.log(`[Audio Engine] Using cached YouTube stream for: ${track.title}`);
-            return cached;
-        }
+        if (cached) return cached;
 
-        // For Spotify tracks (even if they have a preview_url), we resolve via YouTube
-        // to get the FULL song and avoid geoblocking/token issues.
-        dispatch({ type: 'ADD_LOG', text: `Resolving full song: ${track.title}` });
+        // For Spotify tracks, resolve via YouTube
+        dispatch({ type: 'ADD_LOG', text: `Resolving full signal: ${track.title}` });
 
         try {
             const result = await YoutubeService.resolveTrack(track.title, track.artist || 'Unknown Artist');
             if (result?.url) {
-                dispatch({ type: 'ADD_LOG', text: `Playing full song via YouTube match: ${track.title}` });
                 return result.url;
             }
         } catch (error) {
             console.error('[Audio Engine] YouTube Resolution Failed:', error);
         }
 
-        // Final fallback: use the original URL (Spotify preview or webpage link)
-        // If this reaches here and then fails with Ref: 4, it's definitely a source restriction issue.
-        dispatch({ type: 'ADD_LOG', text: `Fallback to Spotify source for: ${track.title}`, level: 'warn' });
-        return track.url;
+        // Final fallback: only use original URL if it's a direct mp3 link (p.scdn.co)
+        // Otherwise, return empty so applying handler can skip.
+        if (track.url && (track.url.includes('p.scdn.co') || track.url.includes('blob:'))) {
+            return track.url;
+        }
+
+        return ''; // Treat as unresolvable
     }, []);
 
     const applyAudioSrc = useCallback(async (el: HTMLAudioElement, track: Track) => {
         const resolvedUrl = await resolveAudioStream(track);
+
+        if (!resolvedUrl) {
+            console.error(`[Audio Engine] Unresolvable track: ${track.title}. Skipping...`);
+            dispatch({ type: 'ADD_LOG', text: `Searching for alternatives: ${track.title}`, level: 'warn' });
+
+            // Auto-skip logic
+            setTimeout(() => {
+                triggerCrossfadeRef.current?.();
+            }, 1000);
+            return;
+        }
+
         console.log(`[Audio Engine] Loading signal: ${resolvedUrl.substring(0, 50)}...`);
 
         if (resolvedUrl.startsWith('blob:') || resolvedUrl.startsWith('data:')) {
-            console.log('[Audio Engine] Scheme: BLOB/DATA - Removing crossOrigin');
             el.removeAttribute('crossorigin');
         } else {
-            console.log('[Audio Engine] Scheme: REMOTE - Setting crossOrigin=anonymous');
             el.crossOrigin = 'anonymous';
         }
         el.src = resolvedUrl;
@@ -810,7 +820,6 @@ export function RadioProvider({ children }: { children: ReactNode }) {
 
                 player.play().then(() => {
                     dispatch({ type: 'SET_STATUS', status: 'PLAYING' });
-                    // Sync initial display
                     const currentStation = state.playlists.find(s => s.id === state.activePlaylistId);
                     if (currentStation && state.schedule.current) {
                         const track = state.schedule.current;
@@ -820,18 +829,10 @@ export function RadioProvider({ children }: { children: ReactNode }) {
                         dispatch({ type: 'UPDATE_NOW_PLAYING', text });
                     }
                 }).catch((e) => {
-                    const errorCode = player.error?.code;
-                    const errorMsg = player.error?.message;
-                    console.error('[Audio Engine] Playback Failed:', {
-                        error: e,
-                        mediaError: { code: errorCode, message: errorMsg },
-                        src: player.src
-                    });
-
-                    let friendlyMessage = 'Playback failed.';
-                    if (errorCode === 4) friendlyMessage = 'Audio source not supported or restricted (Spotify Preview missing).';
-
-                    dispatch({ type: 'ADD_LOG', text: `${friendlyMessage} (Ref: ${errorCode || 'Unknown'})`, level: 'error' });
+                    console.error('[Audio Engine] Playback Failed:', e);
+                    dispatch({ type: 'ADD_LOG', text: 'Signal lost. Attempting to recover...', level: 'warn' });
+                    // Auto-skip on failure
+                    setTimeout(() => triggerCrossfade(), 1000);
                 });
             }
         }

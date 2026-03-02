@@ -8,9 +8,12 @@
 
 const PIPED_INSTANCES = [
     'https://pipedapi.kavin.rocks',
-    'https://piped-api.lunar.icu',
     'https://pipedapi.leptons.xyz',
-    'https://api-piped.mha.fi'
+    'https://piped-api.lunar.icu',
+    'https://api-piped.mha.fi',
+    'https://pipedapi-us.kavin.rocks',
+    'https://piped-api.veris.nu',
+    'https://api.piped.no'
 ];
 
 let currentInstanceIndex = 0;
