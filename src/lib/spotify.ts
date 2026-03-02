@@ -257,14 +257,16 @@ export const SpotifyService = {
                     id: track.id as string,
                     title: (track.name as string) || 'Unknown',
                     artist: artists.map(a => a.name).join(', ') || 'Unknown Artist',
-                    url: (track.preview_url as string) || (track.external_urls as { spotify?: string })?.spotify || (track.uri as string) || '',
+                    url: (track.preview_url as string) || '', // ONLY use preview_url for <audio>
                     duration: Math.round(((track.duration_ms as number) || 0) / 1000),
                     previewUrl: (track.preview_url as string) || undefined
                 };
             })
             .filter((t): t is NonNullable<typeof t> => t !== null);
 
-        console.log(`[Spotify Debug] Final Mapped Result: ${mapped.length} tracks (from ${items.length} items)`);
+        const playableCount = mapped.filter(t => t.url && t.url.includes('p.scdn.co')).length;
+        console.log(`[Spotify Debug] Final Mapped Result: ${mapped.length} tracks (${playableCount} have playable preview URLs)`);
+
         if (items.length > 0 && mapped.length === 0) {
             console.error('[Spotify Debug] CRITICAL MAPPING FAILURE. Spotify returned items, but none matched the track schema.');
             console.log('[Spotify Debug] FULL RAW ACCESS: ', items[0]);

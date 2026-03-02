@@ -380,6 +380,8 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         const queue = stationQueues.current[stationId];
         if (!queue || queue.length === 0) return undefined;
 
+
+
         // Always check: if the next track is the currently playing song, skip it
         if (currentUrl && queue.length > 1) {
             const nextIndex = queue.findIndex((track: Track) => !currentUrl.includes(track.url));
@@ -786,8 +788,19 @@ export function RadioProvider({ children }: { children: ReactNode }) {
                             : track.title;
                         dispatch({ type: 'UPDATE_NOW_PLAYING', text });
                     }
-                }).catch(() => {
-                    dispatch({ type: 'ADD_LOG', text: 'Playback failed.', level: 'error' });
+                }).catch((e) => {
+                    const errorCode = player.error?.code;
+                    const errorMsg = player.error?.message;
+                    console.error('[Audio Engine] Playback Failed:', {
+                        error: e,
+                        mediaError: { code: errorCode, message: errorMsg },
+                        src: player.src
+                    });
+
+                    let friendlyMessage = 'Playback failed.';
+                    if (errorCode === 4) friendlyMessage = 'Audio source not supported or restricted (Spotify Preview missing).';
+
+                    dispatch({ type: 'ADD_LOG', text: `${friendlyMessage} (Ref: ${errorCode || 'Unknown'})`, level: 'error' });
                 });
             }
         }
