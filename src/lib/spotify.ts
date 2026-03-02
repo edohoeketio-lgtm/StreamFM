@@ -103,6 +103,28 @@ export const SpotifyService = {
     },
 
     /**
+     * Step 2.5: Get User Info for diagnostics
+     */
+    getUserEmail: async (token: string): Promise<string> => {
+        const response = await fetch('https://api.spotify.com/v1/me', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        return data.email || 'Unknown Email';
+    },
+
+    /**
+     * Step 2.6: Hard logout / Clear Session
+     */
+    clearSpotifyAuth: () => {
+        localStorage.removeItem('spotify_access_token');
+        localStorage.removeItem('spotify_token_expiry');
+        localStorage.removeItem('spotify_verifier');
+        // Redirect to streamer page to clear any code or state params in URL
+        window.location.href = window.location.origin + '/streamer';
+    },
+
+    /**
      * Step 3: Fetch real playlists
      */
     fetchPlaylists: async (token: string): Promise<SpotifyPlaylist[]> => {

@@ -101,7 +101,7 @@ function radioReducer(state: RadioState, action: RadioAction): RadioState {
             }));
 
             const initialTrack = tracksWithInstances[0];
-            const nowPlaying = initialTrack
+            const nowPlayingText = initialTrack
                 ? (initialTrack.artist && initialTrack.artist !== 'Unknown Artist' ? `${initialTrack.title} - ${initialTrack.artist}` : initialTrack.title)
                 : playlist.name;
 
@@ -109,10 +109,10 @@ function radioReducer(state: RadioState, action: RadioAction): RadioState {
                 ...state,
                 activePlaylistId: action.playlistId,
                 prompt: playlist.name,
-                nowPlaying,
+                nowPlaying: nowPlayingText,
                 schedule: {
                     current: initialTrack || null,
-                    queue: tracksWithInstances.slice(1, 10), // Increase queue visibility
+                    queue: tracksWithInstances.slice(1, 10),
                     history: [],
                     remaining: 180
                 }
@@ -179,15 +179,23 @@ function radioReducer(state: RadioState, action: RadioAction): RadioState {
                 tags: ['User']
             };
             const firstTrack = action.tracks?.[0];
-            const nowPlaying = state.activePlaylistId
+            const nowPlayingText = state.activePlaylistId
                 ? state.nowPlaying
                 : (firstTrack ? (firstTrack.artist && firstTrack.artist !== 'Unknown Artist' ? `${firstTrack.title} - ${firstTrack.artist}` : firstTrack.title) : action.name);
+
+            const initialSchedule = !state.activePlaylistId && firstTrack ? {
+                current: firstTrack,
+                queue: (action.tracks || []).slice(1, 10),
+                history: [],
+                remaining: 180
+            } : state.schedule;
 
             return {
                 ...state,
                 playlists: [...state.playlists, newPlaylist],
-                activePlaylistId: state.activePlaylistId || newPlaylist.id, // Auto-activate if none
-                nowPlaying
+                activePlaylistId: state.activePlaylistId || newPlaylist.id,
+                nowPlaying: nowPlayingText,
+                schedule: initialSchedule
             };
         }
         case 'ADD_TO_LIBRARY': {

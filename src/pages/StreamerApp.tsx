@@ -197,6 +197,7 @@ function SourceLinkerModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
     const [playlists, setPlaylists] = useState<SpotifyPlaylist[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [importingId, setImportingId] = useState<string | null>(null);
+    const [userEmail, setUserEmail] = useState<string | null>(null);
 
     const sources = [
         { id: 'spotify', name: 'Spotify', icon: '💿' },
@@ -211,12 +212,16 @@ function SourceLinkerModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
             if (spotifyToken) {
                 setStep('connecting');
                 try {
-                    const fetched = await SpotifyService.fetchPlaylists(spotifyToken);
+                    const [fetched, email] = await Promise.all([
+                        SpotifyService.fetchPlaylists(spotifyToken),
+                        SpotifyService.getUserEmail(spotifyToken)
+                    ]);
                     setPlaylists(fetched);
+                    setUserEmail(email);
                     setStep('search');
                 } catch (err) {
                     console.error('Failed to load Spotify playlists:', err);
-                    // Token might be expired — show source selection, don't auto-reauth
+                    // Token might be expired or unauthorized (403)
                     localStorage.removeItem('spotify_access_token');
                     setStep('source');
                 }
@@ -329,10 +334,13 @@ function SourceLinkerModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
                                             </button>
                                             {s.id === 'spotify' && spotifyToken && (
                                                 <button
-                                                    onClick={(e) => { e.stopPropagation(); localStorage.removeItem('spotify_access_token'); window.location.reload(); }}
-                                                    className="absolute bottom-4 right-4 text-[8px] font-black uppercase tracking-widest text-white/20 hover:text-red-400 transition-colors bg-white/5 px-2 py-1 rounded-md"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        SpotifyService.clearSpotifyAuth();
+                                                    }}
+                                                    className="absolute bottom-4 right-4 text-[8px] font-black uppercase tracking-widest text-red-400 hover:text-red-300 transition-colors bg-red-400/10 border border-red-400/20 px-2 py-1 rounded-md"
                                                 >
-                                                    Disconnect
+                                                    Hard Disconnect
                                                 </button>
                                             )}
                                         </div>
@@ -415,7 +423,10 @@ function SourceLinkerModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
                         </div>
 
                         <div className="p-8 bg-black/40 border-t border-white/5 flex justify-between items-center text-[8px] font-mono font-bold text-white/35 uppercase tracking-[0.3em]">
-                            <span>Status: {spotifyToken ? 'AUTHENTICATED' : 'AWAITING_AUTH'}</span>
+                            <div className="flex flex-col gap-1">
+                                <span>Status: {spotifyToken ? 'AUTHENTICATED' : 'AWAITING_AUTH'}</span>
+                                {userEmail && <span className="text-accent/60 lowercase tracking-normal font-medium">Account: {userEmail}</span>}
+                            </div>
                             <button
                                 onClick={() => { setStep('source'); setPlaylists([]); setSearchQuery(''); }}
                                 className="hover:text-accent transition-colors"
