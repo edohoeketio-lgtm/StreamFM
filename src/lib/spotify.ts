@@ -17,6 +17,7 @@ const TOKEN_ENDPOINT = 'https://accounts.spotify.com/api/token';
 
 const SCOPES = [
     'user-read-private',
+    'user-read-email',
     'playlist-read-private',
     'playlist-read-collaborative',
     'user-library-read',
@@ -172,11 +173,6 @@ export const SpotifyService = {
             // If tracks endpoint 403s, try the playlist root object as a fallback
             if (err instanceof Error && (err.message.includes('403') || err.message.includes('404'))) {
                 console.warn(`[Spotify Debug] /tracks endpoint failed (${err.message}). Trying root object fallback...`);
-                // If it's a 403, it's almost certainly missing scopes in the current token.
-                if (err.message.includes('403')) {
-                    const enhancedError = new Error('Spotify Access Denied (403). Your session may be missing required permissions. Please DISCONNECT and CONNECT again.');
-                    throw enhancedError;
-                }
 
                 try {
                     const plResponse = await fetchWithRetry(`https://api.spotify.com/v1/playlists/${playlistId}?fields=tracks.items(track(id,name,artists,preview_url,external_urls,uri,duration_ms))`, {
@@ -187,6 +183,10 @@ export const SpotifyService = {
                     console.log(`[Spotify Debug] Root fallback matches: ${items.length} items`);
                 } catch (fallbackErr) {
                     console.error('[Spotify Debug] Fallback also failed:', fallbackErr);
+                    // If both fail and it was a 403, throw the helpful error
+                    if (err.message.includes('403')) {
+                        throw new Error('Spotify Access Denied (403). Your session may be missing required permissions. Please DISCONNECT and CONNECT again.');
+                    }
                     throw err; // Throw original error if fallback also fails
                 }
             } else {
