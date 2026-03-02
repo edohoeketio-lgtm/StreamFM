@@ -713,7 +713,7 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
                     tracks.push({
                         id: Math.random().toString(36).substr(2, 9),
                         title: entry.name.replace(/\.(mp3|wav)$/, ''),
-                        artist: 'Local Ingest',
+                        artist: 'Unknown Artist',
                         bpm: 120,
                         url: URL.createObjectURL(await entry.getFile())
                     });
@@ -753,7 +753,7 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
                 tracks.push({
                     id: Math.random().toString(36).substr(2, 9),
                     title: file.name.replace(/\.(mp3|wav)$/, ''),
-                    artist: 'Local Ingest',
+                    artist: 'Unknown Artist',
                     bpm: 120,
                     url: URL.createObjectURL(file)
                 });

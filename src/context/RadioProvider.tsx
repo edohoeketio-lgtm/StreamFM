@@ -646,7 +646,10 @@ export function RadioProvider({ children }: { children: ReactNode }) {
                     remaining: 180
                 }
             });
-            dispatch({ type: 'UPDATE_NOW_PLAYING', text: `${nextTrack.title} - ${nextTrack.artist}` });
+            const nowPlayingText = nextTrack.artist && nextTrack.artist !== 'Unknown Artist'
+                ? `${nextTrack.title} - ${nextTrack.artist}`
+                : nextTrack.title;
+            dispatch({ type: 'UPDATE_NOW_PLAYING', text: nowPlayingText });
 
             setTimeout(() => {
                 currentAudio.pause();
@@ -737,7 +740,10 @@ export function RadioProvider({ children }: { children: ReactNode }) {
                     const currentStation = state.playlists.find(s => s.id === state.activePlaylistId);
                     if (currentStation && state.schedule.current) {
                         const track = state.schedule.current;
-                        dispatch({ type: 'UPDATE_NOW_PLAYING', text: `${track.title} - ${track.artist}` });
+                        const text = track.artist && track.artist !== 'Unknown Artist'
+                            ? `${track.title} - ${track.artist}`
+                            : track.title;
+                        dispatch({ type: 'UPDATE_NOW_PLAYING', text });
                     }
                 }).catch(() => {
                     dispatch({ type: 'ADD_LOG', text: 'Playback failed.', level: 'error' });
