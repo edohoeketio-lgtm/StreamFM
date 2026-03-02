@@ -395,11 +395,15 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         return queue.shift();
     }, []);
 
-    const resolveAudioStream = async (track: Track): Promise<string> => {
+    const resolveAudioStream = useCallback(async (track: Track): Promise<string> => {
         // If it's a blob (local) or already a valid Spotify preview, return as is
         if (track.url.startsWith('blob:') || track.url.startsWith('data:') || track.url.includes('p.scdn.co')) {
             return track.url;
         }
+
+        // Check if we've already resolved this (cache)
+        const cached = YoutubeService.getCachedResolution(track.title, track.artist || 'Unknown Artist');
+        if (cached) return cached;
 
         // Otherwise, it's a Spotify track missing a preview
         dispatch({ type: 'ADD_LOG', text: `Resolving full song for: ${track.title}` });
@@ -411,7 +415,31 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         }
 
         return track.url; // Fallback to original
-    };
+    }, []);
+
+    const applyAudioSrc = useCallback(async (el: HTMLAudioElement, track: Track) => {
+        const resolvedUrl = await resolveAudioStream(track);
+        console.log(`[Audio Engine] Loading signal: ${resolvedUrl.substring(0, 50)}...`);
+
+        if (resolvedUrl.startsWith('blob:') || resolvedUrl.startsWith('data:')) {
+            console.log('[Audio Engine] Scheme: BLOB/DATA - Removing crossOrigin');
+            el.removeAttribute('crossorigin');
+        } else {
+            console.log('[Audio Engine] Scheme: REMOTE - Setting crossOrigin=anonymous');
+            el.crossOrigin = 'anonymous';
+        }
+        el.src = resolvedUrl;
+        el.load(); // Explicitly trigger load
+    }, [resolveAudioStream]);
+
+    // Pre-buffering: Resolve the next track in the queue in the background
+    useEffect(() => {
+        const nextTrack = state.schedule.queue[0];
+        if (nextTrack) {
+            // Resolve silently in background to fill cache
+            resolveAudioStream(nextTrack);
+        }
+    }, [state.schedule.queue, resolveAudioStream]);
 
     const initAudio = () => {
         if (audioContextRef.current) return;
@@ -438,18 +466,7 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         const elA = new Audio(); elA.loop = false;
         const elB = new Audio(); elB.loop = false;
 
-        const applyAudioSrc = (el: HTMLAudioElement, url: string) => {
-            console.log(`[Audio Engine] Loading signal: ${url.substring(0, 50)}...`);
-            if (url.startsWith('blob:') || url.startsWith('data:')) {
-                console.log('[Audio Engine] Scheme: BLOB/DATA - Removing crossOrigin');
-                el.removeAttribute('crossorigin');
-            } else {
-                console.log('[Audio Engine] Scheme: REMOTE - Setting crossOrigin=anonymous');
-                el.crossOrigin = 'anonymous';
-            }
-            el.src = url;
-            el.load(); // Explicitly trigger load
-        };
+
 
         elA.onerror = (e) => console.error('[Audio Engine] Player A Error:', e, elA.error);
         elB.onerror = (e) => console.error('[Audio Engine] Player B Error:', e, elB.error);
@@ -489,7 +506,7 @@ export function RadioProvider({ children }: { children: ReactNode }) {
             const s = state.playlists[0];
             const track = getNextTrack(s.id, s.tracks);
             if (track) {
-                applyAudioSrc(elA, track.url);
+                applyAudioSrc(elA, track);
             }
         }
 
@@ -643,71 +660,69 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         }
 
         // Use the same helper for dynamic crossOrigin
-        const resolvedUrl = await resolveAudioStream(nextTrack);
-        if (resolvedUrl.startsWith('blob:') || resolvedUrl.startsWith('data:')) {
-            nextAudio.removeAttribute('crossorigin');
-        } else {
-            nextAudio.crossOrigin = 'anonymous';
-        }
-        nextAudio.src = resolvedUrl;
+        await applyAudioSrc(nextAudio, nextTrack);
 
         // Re-attach listener on new tracks
         nextAudio.onended = () => {
             triggerCrossfadeRef.current?.(targetStation.id);
         };
 
+        const FADE_TIME = currentState.crossfadeLength || 2.0;
+        const now = ctx.currentTime;
+
         nextAudio.volume = 1;
-        nextGain.gain.setValueAtTime(0, ctx.currentTime);
+        nextGain.gain.setValueAtTime(0, now);
+        nextGain.gain.linearRampToValueAtTime(1, now + FADE_TIME);
+
+        currentGain.gain.setValueAtTime(1, now);
+        currentGain.gain.linearRampToValueAtTime(0, now + FADE_TIME);
 
         try {
             await nextAudio.play();
-            const FADE_TIME = stateRef.current.crossfadeLength || 2.0;
-            const now = ctx.currentTime;
-
-            nextGain.gain.linearRampToValueAtTime(1, now + FADE_TIME);
-
-            currentGain.gain.setValueAtTime(1, now);
-            currentGain.gain.linearRampToValueAtTime(0, now + FADE_TIME);
 
             activePlayer.current = nextPlayerId;
 
-            let nextQueue: Track[];
+            let finalNextQueue: Track[];
             let newHistory: Track[];
 
             if (isSkipBack) {
                 // Skip Back: Push current back to queue, pop from history
-                nextQueue = stateRef.current.schedule.current
-                    ? [stateRef.current.schedule.current, ...stateRef.current.schedule.queue.slice(0, -1)]
-                    : [...stateRef.current.schedule.queue];
-                newHistory = stateRef.current.schedule.history.slice(0, -1);
+                finalNextQueue = currentState.schedule.current
+                    ? [currentState.schedule.current, ...currentState.schedule.queue.slice(0, -1)]
+                    : [...currentState.schedule.queue];
+                newHistory = currentState.schedule.history.slice(0, -1);
             } else {
                 // Skip Forward / Auto: Push current to history, shift queue
-                newHistory = [...stateRef.current.schedule.history];
-                if (stateRef.current.schedule.current) {
-                    newHistory.push(stateRef.current.schedule.current);
+                newHistory = [...currentState.schedule.history];
+                if (currentState.schedule.current) {
+                    newHistory.push(currentState.schedule.current);
                     if (newHistory.length > 50) newHistory.shift();
                 }
 
-                nextQueue = [...stateRef.current.schedule.queue.slice(1)];
-                const newTrack = getNextTrack(targetStation.id, targetStation.tracks, nextTrack.url);
-                if (newTrack) {
-                    nextQueue.push(newTrack);
+                finalNextQueue = manualQueue.length > 0 ? manualQueue.slice(1) : currentState.schedule.queue;
+
+                // If it was an auto-next from the playlist (not manual queue), we might need to push a new track
+                if (manualQueue.length === 0) {
+                    const freshTrack = getNextTrack(targetStation.id, targetStation.tracks, nextTrack.url);
+                    if (freshTrack) finalNextQueue.push(freshTrack);
                 }
             }
 
             dispatch({
                 type: 'UPDATE_SCHEDULE',
                 schedule: {
+                    ...currentState.schedule,
                     current: nextTrack,
-                    queue: nextQueue,
                     history: newHistory,
-                    remaining: 180
+                    queue: finalNextQueue,
+                    remaining: nextTrack.duration || 180
                 }
             });
-            const nowPlayingText = nextTrack.artist && nextTrack.artist !== 'Unknown Artist'
+
+            const text = nextTrack.artist && nextTrack.artist !== 'Unknown Artist'
                 ? `${nextTrack.title} - ${nextTrack.artist}`
                 : nextTrack.title;
-            dispatch({ type: 'UPDATE_NOW_PLAYING', text: nowPlayingText });
+            dispatch({ type: 'UPDATE_NOW_PLAYING', text });
 
             setTimeout(() => {
                 currentAudio.pause();
@@ -718,7 +733,7 @@ export function RadioProvider({ children }: { children: ReactNode }) {
             console.error('Crossfade failed', e);
             dispatch({ type: 'ADD_LOG', text: 'Crossfade failed, retrying...', level: 'error' });
         }
-    }, [dispatch, getNextTrack]);
+    }, [getNextTrack, applyAudioSrc]);
 
     const skipNext = useCallback(() => {
         triggerCrossfade();
@@ -781,13 +796,7 @@ export function RadioProvider({ children }: { children: ReactNode }) {
                             return;
                         }
 
-                        const resolvedUrl = await resolveAudioStream(track);
-                        if (resolvedUrl.startsWith('blob:') || resolvedUrl.startsWith('data:')) {
-                            player.removeAttribute('crossorigin');
-                        } else {
-                            player.crossOrigin = 'anonymous';
-                        }
-                        player.src = resolvedUrl;
+                        await applyAudioSrc(player, track);
 
                         // Ensure auto-play on track end
                         player.onended = () => {

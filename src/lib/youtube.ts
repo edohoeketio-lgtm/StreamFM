@@ -8,12 +8,29 @@
 
 const PIPED_API_BASE = 'https://pipedapi.kavin.rocks';
 
+const resolutionCache: Record<string, string> = {};
+
 export interface YoutubeAudioResult {
     url: string;
     videoId: string;
 }
 
 export const YoutubeService = {
+    /**
+     * Cache a resolution URL for a track title + artist.
+     */
+    cacheResolution: (title: string, artist: string, url: string) => {
+        const key = `${title}-${artist}`.toLowerCase();
+        resolutionCache[key] = url;
+    },
+
+    /**
+     * Get a cached resolution URL if it exists.
+     */
+    getCachedResolution: (title: string, artist: string) => {
+        const key = `${title}-${artist}`.toLowerCase();
+        return resolutionCache[key] || null;
+    },
     /**
      * Search YouTube for a track by name and artist.
      * Returns the videoId of the best match.
@@ -70,6 +87,13 @@ export const YoutubeService = {
      * Combined helper: Name/Artist -> Audio URL
      */
     resolveTrack: async (title: string, artist: string): Promise<YoutubeAudioResult | null> => {
+        // Check cache first
+        const cachedUrl = YoutubeService.getCachedResolution(title, artist);
+        if (cachedUrl) {
+            console.log(`[YouTube Service] Using cached resolution for: ${title}`);
+            return { url: cachedUrl, videoId: 'cached' };
+        }
+
         console.log(`[YouTube Service] Resolving full song for: ${title} - ${artist}`);
 
         const videoId = await YoutubeService.searchTrack(title, artist);
@@ -77,6 +101,9 @@ export const YoutubeService = {
 
         const url = await YoutubeService.resolveAudioUrl(videoId);
         if (!url) return null;
+
+        // Cache for future use
+        YoutubeService.cacheResolution(title, artist, url);
 
         return { url, videoId };
     }
