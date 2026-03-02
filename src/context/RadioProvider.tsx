@@ -173,7 +173,11 @@ function radioReducer(state: RadioState, action: RadioAction): RadioState {
                 tracks: action.tracks || [],
                 tags: ['User']
             };
-            return { ...state, playlists: [...state.playlists, newPlaylist] };
+            return {
+                ...state,
+                playlists: [...state.playlists, newPlaylist],
+                activePlaylistId: state.activePlaylistId || newPlaylist.id // Auto-activate if none
+            };
         }
         case 'ADD_TO_LIBRARY': {
             const tracksWithInstances = action.tracks.map(t => ({
@@ -187,8 +191,10 @@ function radioReducer(state: RadioState, action: RadioAction): RadioState {
                 ...action.track,
                 instanceId: `${action.track.id}-${Math.random().toString(36).substr(2, 9)}`
             };
+            const targetPlaylistId = action.playlistId || state.activePlaylistId || (state.playlists.length > 0 ? state.playlists[0].id : null);
+
             const updatedPlaylists = state.playlists.map(p => {
-                if (p.id === action.playlistId) {
+                if (p.id === targetPlaylistId) {
                     return { ...p, tracks: [...p.tracks, trackWithInstance] };
                 }
                 return p;
@@ -196,7 +202,7 @@ function radioReducer(state: RadioState, action: RadioAction): RadioState {
 
             // Sync with active schedule if we are adding to the current playlist
             let newSchedule = state.schedule;
-            if (action.playlistId === state.activePlaylistId) {
+            if (targetPlaylistId === (state.activePlaylistId || targetPlaylistId)) {
                 if (!state.schedule.current) {
                     newSchedule = {
                         ...state.schedule,
@@ -213,7 +219,12 @@ function radioReducer(state: RadioState, action: RadioAction): RadioState {
                 }
             }
 
-            return { ...state, playlists: updatedPlaylists, schedule: newSchedule };
+            return {
+                ...state,
+                playlists: updatedPlaylists,
+                schedule: newSchedule,
+                activePlaylistId: state.activePlaylistId || (targetPlaylistId as string)
+            };
         }
         case 'REORDER_PLAYLIST': {
             const updatedPlaylists = state.playlists.map(p => {
@@ -381,13 +392,20 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         const elB = new Audio(); elB.loop = false;
 
         const applyAudioSrc = (el: HTMLAudioElement, url: string) => {
+            console.log(`[Audio Engine] Loading signal: ${url.substring(0, 50)}...`);
             if (url.startsWith('blob:') || url.startsWith('data:')) {
+                console.log('[Audio Engine] Scheme: BLOB/DATA - Removing crossOrigin');
                 el.removeAttribute('crossorigin');
             } else {
+                console.log('[Audio Engine] Scheme: REMOTE - Setting crossOrigin=anonymous');
                 el.crossOrigin = 'anonymous';
             }
             el.src = url;
+            el.load(); // Explicitly trigger load
         };
+
+        elA.onerror = (e) => console.error('[Audio Engine] Player A Error:', e, elA.error);
+        elB.onerror = (e) => console.error('[Audio Engine] Player B Error:', e, elB.error);
 
         audioA.current = elA;
         audioB.current = elB;

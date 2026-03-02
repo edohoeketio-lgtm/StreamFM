@@ -881,7 +881,12 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
                                 key={track.id}
                                 className="flex items-center gap-4 px-4 py-3 bg-white/[0.02] border border-white/5 hover:border-white/10 hover:bg-white/[0.04] rounded-md transition-all group cursor-pointer"
                                 onClick={() => {
-                                    dispatch({ type: 'ADD_TO_PLAYLIST', playlistId: state.activePlaylistId, track });
+                                    if (state.playlists.length === 0) {
+                                        dispatch({ type: 'CREATE_PLAYLIST', name: 'Standard Project', tracks: [track] });
+                                        dispatch({ type: 'ADD_LOG', text: `Created new project with ${track.title}` });
+                                    } else {
+                                        dispatch({ type: 'ADD_TO_PLAYLIST', playlistId: state.activePlaylistId || state.playlists[0].id, track });
+                                    }
                                 }}
                             >
                                 <div className="flex flex-col gap-1 flex-1 min-w-0">
