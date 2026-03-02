@@ -156,60 +156,61 @@ export const SpotifyService = {
      * Step 5: Fetch tracks from a specific playlist
      */
     fetchPlaylistTracks: async (token: string, playlistId: string): Promise<{ id: string; title: string; artist: string; url: string; duration: number; previewUrl?: string }[]> => {
+        let items: Record<string, unknown>[] = [];
+
         try {
-            // Try the standard tracks endpoint first as it's the most reliable for full lists
+            // Try the standard tracks endpoint first (most common)
             const response = await fetchWithRetry(`https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-
             const data = await response.json();
-            const items = data?.items || [];
+            items = data?.items || [];
+        } catch (err) {
+            // If tracks endpoint 403s, try the playlist root object as a fallback
+            if (err instanceof Error && (err.message.includes('403') || err.message.includes('404'))) {
+                console.warn(`[Spotify] /tracks endpoint failed (${err.message}). Trying root object fallback...`);
+                try {
+                    const plResponse = await fetchWithRetry(`https://api.spotify.com/v1/playlists/${playlistId}?fields=tracks.items(track(id,name,artists,preview_url,external_urls,uri,duration_ms))`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const plData = await plResponse.json();
+                    items = plData?.tracks?.items || [];
+                } catch (fallbackErr) {
+                    console.error('[Spotify] Fallback also failed:', fallbackErr);
+                    throw err; // Throw original 403 if fallback also fails
+                }
+            } else {
+                throw err;
+            }
+        }
 
-            if (items.length === 0) {
-                console.warn('[Spotify] No tracks found via /tracks endpoint, trying fallback via main playlist object...');
-                const plResponse = await fetchWithRetry(`https://api.spotify.com/v1/playlists/${playlistId}`, {
+        // If we got here with empty tracks, try one last time without fields filter if we haven't already
+        if (items.length === 0) {
+            try {
+                const finalResponse = await fetchWithRetry(`https://api.spotify.com/v1/playlists/${playlistId}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                const plData = await plResponse.json();
-                if (plData?.tracks?.items) {
-                    return plData.tracks.items
-                        .filter((item: Record<string, unknown>) => (item?.track as Record<string, unknown>)?.id)
-                        .map((item: Record<string, unknown>) => {
-                            const track = item.track as Record<string, unknown>;
-                            const artists = (track.artists as { name: string }[] | undefined) || [];
-                            return {
-                                id: track.id as string,
-                                title: (track.name as string) || 'Unknown',
-                                artist: artists.map(a => a.name).join(', ') || 'Unknown',
-                                url: (track.preview_url as string) || (track.external_urls as { spotify?: string })?.spotify || (track.uri as string) || '',
-                                duration: Math.round(((track.duration_ms as number) || 0) / 1000),
-                                previewUrl: (track.preview_url as string) || undefined
-                            };
-                        });
-                }
+                const finalData = await finalResponse.json();
+                items = finalData?.tracks?.items || [];
+            } catch {
+                // Ignore final attempt failure
             }
-
-            return items
-                .filter((item: Record<string, unknown>) => item && item.track && (item.track as Record<string, unknown>).id)
-                .map((item: Record<string, unknown>) => {
-                    const track = item.track as Record<string, unknown>;
-                    const artists = (track.artists as { name: string }[] | undefined) || [];
-                    return {
-                        id: track.id as string,
-                        title: (track.name as string) || 'Unknown Track',
-                        artist: artists.map(a => a.name).join(', ') || 'Unknown Artist',
-                        url: (track.preview_url as string) || (track.external_urls as { spotify?: string })?.spotify || (track.uri as string) || '',
-                        duration: Math.round(((track.duration_ms as number) || 0) / 1000),
-                        previewUrl: (track.preview_url as string) || undefined
-                    };
-                });
-        } catch (err) {
-            console.error('Spotify Fetch Tracks Failed:', err);
-            if (err instanceof Error && err.message.includes('403')) {
-                throw new Error('Spotify Access Denied (403). If you just added your email to the allowlist, please DISCONNECT and CONNECT Spotify again to refresh your session.');
-            }
-            throw err;
         }
+
+        return items
+            .filter((item) => (item?.track as Record<string, unknown>)?.id)
+            .map((item) => {
+                const track = item.track as Record<string, unknown>;
+                const artists = (track.artists as { name: string }[] | undefined) || [];
+                return {
+                    id: track.id as string,
+                    title: (track.name as string) || 'Unknown',
+                    artist: artists.map(a => a.name).join(', ') || 'Unknown Artist',
+                    url: (track.preview_url as string) || (track.external_urls as { spotify?: string })?.spotify || (track.uri as string) || '',
+                    duration: Math.round(((track.duration_ms as number) || 0) / 1000),
+                    previewUrl: (track.preview_url as string) || undefined
+                };
+            });
     }
 };
 

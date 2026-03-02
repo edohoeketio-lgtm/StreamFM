@@ -272,7 +272,8 @@ function SourceLinkerModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
             onClose();
         } catch (err) {
             console.error('Import failed:', err);
-            dispatch({ type: 'ADD_LOG', text: `Failed to import "${playlist.name}"`, level: 'error' });
+            const errorMsg = err instanceof Error ? err.message : String(err);
+            dispatch({ type: 'ADD_LOG', text: `Failed to import "${playlist.name}": ${errorMsg}`, level: 'error' });
             setImportingId(null);
             setStep('search');
         }
