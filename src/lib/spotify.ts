@@ -157,6 +157,7 @@ export const SpotifyService = {
      */
     fetchPlaylistTracks: async (token: string, playlistId: string): Promise<{ id: string; title: string; artist: string; url: string; duration: number; previewUrl?: string }[]> => {
         let items: Record<string, unknown>[] = [];
+        console.log(`[Spotify Debug] Starting ingest for playlist: ${playlistId}`);
 
         try {
             // Try the standard tracks endpoint first (most common)
@@ -165,18 +166,21 @@ export const SpotifyService = {
             });
             const data = await response.json();
             items = data?.items || [];
+            console.log(`[Spotify Debug] /tracks response matches: ${items.length} items`);
+            if (items.length > 0) console.log(`[Spotify Debug] First item track ID:`, (items[0]?.track as Record<string, unknown>)?.id);
         } catch (err) {
             // If tracks endpoint 403s, try the playlist root object as a fallback
             if (err instanceof Error && (err.message.includes('403') || err.message.includes('404'))) {
-                console.warn(`[Spotify] /tracks endpoint failed (${err.message}). Trying root object fallback...`);
+                console.warn(`[Spotify Debug] /tracks endpoint failed (${err.message}). Trying root object fallback...`);
                 try {
                     const plResponse = await fetchWithRetry(`https://api.spotify.com/v1/playlists/${playlistId}?fields=tracks.items(track(id,name,artists,preview_url,external_urls,uri,duration_ms))`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     });
                     const plData = await plResponse.json();
                     items = plData?.tracks?.items || [];
+                    console.log(`[Spotify Debug] Root fallback matches: ${items.length} items`);
                 } catch (fallbackErr) {
-                    console.error('[Spotify] Fallback also failed:', fallbackErr);
+                    console.error('[Spotify Debug] Fallback also failed:', fallbackErr);
                     throw err; // Throw original 403 if fallback also fails
                 }
             } else {
@@ -186,18 +190,23 @@ export const SpotifyService = {
 
         // If we got here with empty tracks, try one last time without fields filter if we haven't already
         if (items.length === 0) {
+            console.log('[Spotify Debug] Still 0 items, attempting unrestricted root fetch...');
             try {
                 const finalResponse = await fetchWithRetry(`https://api.spotify.com/v1/playlists/${playlistId}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const finalData = await finalResponse.json();
                 items = finalData?.tracks?.items || [];
-            } catch {
-                // Ignore final attempt failure
+                console.log(`[Spotify Debug] Unrestricted fetch matches: ${items.length} items`);
+                if (items.length === 0) {
+                    console.log('[Spotify Debug] RAW FULL DATA:', JSON.stringify(finalData).substring(0, 500));
+                }
+            } catch (e) {
+                console.error('[Spotify Debug] Final unrestricted attempt failed:', e);
             }
         }
 
-        return items
+        const mapped = items
             .filter((item) => (item?.track as Record<string, unknown>)?.id)
             .map((item) => {
                 const track = item.track as Record<string, unknown>;
@@ -211,6 +220,9 @@ export const SpotifyService = {
                     previewUrl: (track.preview_url as string) || undefined
                 };
             });
+
+        console.log(`[Spotify Debug] Final Mapped Result: ${mapped.length} tracks`);
+        return mapped;
     }
 };
 

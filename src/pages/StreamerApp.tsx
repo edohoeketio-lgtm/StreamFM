@@ -255,6 +255,8 @@ function SourceLinkerModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
 
         try {
             const spotifyTracks = await SpotifyService.fetchPlaylistTracks(spotifyToken, playlist.id);
+            console.log('[Spotify Debug] Received tracks from service:', spotifyTracks.length);
+
             const tracks: Track[] = spotifyTracks.map(t => ({
                 id: t.id,
                 instanceId: `${t.id}-${Math.random().toString(36).substr(2, 9)}`,
@@ -264,6 +266,7 @@ function SourceLinkerModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
                 url: t.url
             }));
 
+            console.log('[Spotify Debug] Dispatching tracks to library/playlist:', tracks.length);
             dispatch({ type: 'CREATE_PLAYLIST', name: playlist.name, tracks });
             dispatch({ type: 'ADD_TO_LIBRARY', tracks });
             dispatch({ type: 'ADD_LOG', text: `✅ Imported "${playlist.name}" — ${tracks.length} tracks added to library` });
