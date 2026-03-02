@@ -365,9 +365,10 @@ export function RadioProvider({ children }: { children: ReactNode }) {
     };
 
     // Helper to get next track for a station without repeating
-    const getNextTrack = useCallback((stationId: string, tracks: Track[], currentUrl?: string): Track => {
+    const getNextTrack = useCallback((stationId: string, tracks: Track[], currentUrl?: string): Track | undefined => {
         if (!stationQueues.current[stationId] || stationQueues.current[stationId].length === 0) {
             // Refill and shuffle the queue
+            if (!tracks || tracks.length === 0) return undefined;
             const shuffled = shuffleArray(tracks);
             // If the first song in new deck is the same as the last played song, swap it
             if (currentUrl && currentUrl.includes(shuffled[0].url) && shuffled.length > 1) {
@@ -377,7 +378,7 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         }
 
         const queue = stationQueues.current[stationId];
-        if (!queue || queue.length === 0) return null as any;
+        if (!queue || queue.length === 0) return undefined;
 
         // Always check: if the next track is the currently playing song, skip it
         if (currentUrl && queue.length > 1) {
@@ -466,7 +467,9 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         if (state.playlists.length > 0) {
             const s = state.playlists[0];
             const track = getNextTrack(s.id, s.tracks);
-            applyAudioSrc(elA, track.url);
+            if (track) {
+                applyAudioSrc(elA, track.url);
+            }
         }
 
         dispatch({ type: 'ADD_LOG', text: 'Broadcast Audio Engine Initialized (Dual-Source)' });
@@ -665,7 +668,9 @@ export function RadioProvider({ children }: { children: ReactNode }) {
 
                 nextQueue = [...stateRef.current.schedule.queue.slice(1)];
                 const newTrack = getNextTrack(targetStation.id, targetStation.tracks, nextTrack.url);
-                nextQueue.push(newTrack);
+                if (newTrack) {
+                    nextQueue.push(newTrack);
+                }
             }
 
             dispatch({
