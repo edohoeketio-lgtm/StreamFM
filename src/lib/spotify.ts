@@ -205,11 +205,18 @@ export const SpotifyService = {
                 items = finalData?.tracks?.items || [];
                 console.log(`[Spotify Debug] Unrestricted fetch matches: ${items.length} items`);
                 if (items.length === 0) {
-                    console.log('[Spotify Debug] RAW FULL DATA:', JSON.stringify(finalData).substring(0, 500));
+                    // Log the keys of the tracks object if it exists
+                    console.log('[Spotify Debug] Tracks object keys:', finalData?.tracks ? Object.keys(finalData.tracks) : 'No tracks object');
+                    console.log('[Spotify Debug] RAW FULL DATA SAMPLE:', JSON.stringify(finalData).substring(0, 1000));
                 }
             } catch (e) {
                 console.error('[Spotify Debug] Final unrestricted attempt failed:', e);
             }
+        }
+
+        if (items.length > 0) {
+            console.log('[Spotify Debug] First item keys:', Object.keys(items[0]));
+            if (items[0].track) console.log('[Spotify Debug] First item.track keys:', Object.keys(items[0].track as object));
         }
 
         const mapped = items

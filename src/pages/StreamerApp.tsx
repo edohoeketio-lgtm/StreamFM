@@ -875,7 +875,7 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
                 {/* TRACKLIST (LIBRARY) */}
                 <div className="px-6 mb-10 overflow-hidden">
                     <h3 className="text-[9px] font-black uppercase tracking-[0.2em] text-white/25 mb-4 px-2">Project Tracklist</h3>
-                    <div className="space-y-1 max-h-48 overflow-y-auto custom-scrollbar pr-2">
+                    <div className="space-y-1">
                         {library.map((track) => (
                             <div
                                 key={track.id}
@@ -951,7 +951,7 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
                             </button>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 gap-1.5 overflow-y-auto custom-scrollbar max-h-48 pr-2">
+                        <div className="grid grid-cols-1 gap-1.5 pr-2">
                             {playlists.map(playlist => {
                                 const isActive = playlist.id === state.activePlaylistId;
                                 return (
