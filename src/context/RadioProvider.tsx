@@ -445,7 +445,7 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         return ''; // Treat as unresolvable
     }, []);
 
-    const applyAudioSrc = useCallback(async (playerKey: 'A' | 'B', track: Track) => {
+    const applyAudioSrc = useCallback(async (playerKey: 'A' | 'B', track: Track): Promise<boolean | null> => {
         const resolvedUrl = await resolveAudioStream(track);
 
         if (!resolvedUrl) {
@@ -454,7 +454,7 @@ export function RadioProvider({ children }: { children: ReactNode }) {
             setTimeout(() => {
                 triggerCrossfadeRef.current?.();
             }, 1000);
-            return;
+            return null;
         }
 
         const isYoutube = resolvedUrl.includes('youtube.com') || resolvedUrl.includes('youtu.be');
@@ -468,7 +468,10 @@ export function RadioProvider({ children }: { children: ReactNode }) {
             } else {
                 setYtUrlB(resolvedUrl);
             }
-            if (el) { el.src = ''; } // Clear audio element
+            if (el) {
+                el.removeAttribute('src');
+                el.load();
+            } // Clear audio element properly
         } else {
             // Loading into HTML Audio Engine
             console.log(`[Audio Engine] Direct Engine Loading: ${resolvedUrl.substring(0, 50)}...`);
@@ -485,6 +488,7 @@ export function RadioProvider({ children }: { children: ReactNode }) {
                 el.load();
             }
         }
+        return isYoutube;
     }, [resolveAudioStream, triggerCrossfadeRef]);
 
     const PlayerComponent = ReactPlayer as any;
@@ -708,7 +712,8 @@ export function RadioProvider({ children }: { children: ReactNode }) {
             return;
         }
 
-        await applyAudioSrc(nextPlayerId, nextTrack);
+        const isYoutubeNext = await applyAudioSrc(nextPlayerId, nextTrack);
+        if (isYoutubeNext === null) return;
 
         const FADE_TIME = currentState.crossfadeLength || 2.0;
         const now = ctx.currentTime;
@@ -763,7 +768,10 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         }
 
         try {
-            if (nextAudio.src) await nextAudio.play();
+            // Only play HTML5 audio if it's NOT a YouTube track AND it actually has a valid source (not falling back to base URL)
+            if (!isYoutubeNext && nextAudio.src && nextAudio.src !== window.location.href) {
+                await nextAudio.play();
+            }
 
             activePlayer.current = nextPlayerId;
 
