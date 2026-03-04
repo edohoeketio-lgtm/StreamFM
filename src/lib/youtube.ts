@@ -46,12 +46,29 @@ export const YoutubeService = {
      * Uses a double-fallback strategy: Direct -> CORS Proxy -> Next Instance.
      */
     searchTrack: async (title: string, artist: string): Promise<string | null> => {
+        // 1. Try Vercel Edge Function first (Bypasses CORS entirely, Production Grade)
+        try {
+            const proxyRes = await fetch(`/api/search?title=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist)}`);
+            if (proxyRes.ok) {
+                const proxyData = await proxyRes.json();
+                if (proxyData.videoId) {
+                    console.log(`[YouTube Search] Resolved via API Proxy: ${proxyData.videoId} (Source: ${proxyData.source})`);
+                    return proxyData.videoId;
+                }
+            } else {
+                console.warn(`[YouTube Search] API Proxy returned ${proxyRes.status}. Falling back...`);
+            }
+        } catch {
+            console.warn('[YouTube Search] API Proxy failed or unavailable (local dev). Falling back to direct fetch.');
+        }
+
+        // 2. Fallback for Local Dev (Vite doesn't serve /api by default)
         const fetchWithRetry = async (retryCount = 2): Promise<string | null> => {
             const query = encodeURIComponent(`${title} ${artist} topic`);
             const baseUrl = getPipedBase();
             const searchUrl = `${baseUrl}/search?q=${query}&filter=videos`;
 
-            const parseResults = (data: any) => {
+            const parseResults = (data: { items?: { url?: string }[] }) => {
                 const results = data.items || [];
                 if (results.length > 0) {
                     const url = results[0].url || '';
@@ -77,13 +94,11 @@ export const YoutubeService = {
                     if (!response.ok) throw new Error(`Proxy HTTP ${response.status}`);
 
                     const proxyData = await response.json();
-                    // allorigins returns the actual JSON string in 'contents'
                     const actualData = JSON.parse(proxyData.contents);
                     return parseResults(actualData);
                 } catch (proxyErr) {
                     console.error(`[YouTube Search] Proxy failed on ${baseUrl}:`, proxyErr);
 
-                    // Fallback 2: Rotate and Retry
                     if (retryCount > 0) {
                         rotateInstance();
                         return fetchWithRetry(retryCount - 1);
