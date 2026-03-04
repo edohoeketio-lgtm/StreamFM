@@ -1,4 +1,5 @@
-import { useReducer, useEffect, useRef, useCallback, type ReactNode } from 'react';
+import { useReducer, useEffect, useRef, useCallback, useState, type ReactNode } from 'react';
+import ReactPlayer from 'react-player';
 import { YoutubeService } from '../lib/youtube';
 import { RadioContext, AudioRefsContext } from './RadioContexts';
 import { RadioState, RadioAction, Playlist, MusicSource, Track } from '../types/radio';
@@ -344,13 +345,25 @@ export function RadioProvider({ children }: { children: ReactNode }) {
 
     const audioA = useRef<HTMLAudioElement | null>(null);
     const audioB = useRef<HTMLAudioElement | null>(null);
+    const playerARef = useRef<any>(null);
+    const playerBRef = useRef<any>(null);
     const gainA = useRef<GainNode | null>(null);
     const gainB = useRef<GainNode | null>(null);
+
+    // Volume state for YouTube Players (0-1)
+    const [ytVolA, setYtVolA] = useState(0);
+    const [ytVolB, setYtVolB] = useState(0);
+    const [ytUrlA, setYtUrlA] = useState<string | null>(null);
+    const [ytUrlB, setYtUrlB] = useState<string | null>(null);
+    const [ytPlayingA, setYtPlayingA] = useState(false);
+    const [ytPlayingB, setYtPlayingB] = useState(false);
 
     const activePlayer = useRef<'A' | 'B'>('A');
     const lastPlayedStationId = useRef<string | null>(null);
     const stationQueues = useRef<Record<string, Track[]>>({});
     const stateRef = useRef(state);
+    const triggerCrossfadeRef = useRef<((stationId?: string) => Promise<void>) | null>(null);
+
     useEffect(() => {
         stateRef.current = state;
     }, [state]);
@@ -428,30 +441,49 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         return ''; // Treat as unresolvable
     }, []);
 
-    const applyAudioSrc = useCallback(async (el: HTMLAudioElement, track: Track) => {
+    const applyAudioSrc = useCallback(async (playerKey: 'A' | 'B', track: Track) => {
         const resolvedUrl = await resolveAudioStream(track);
 
         if (!resolvedUrl) {
             console.error(`[Audio Engine] Unresolvable track: ${track.title}. Skipping...`);
             dispatch({ type: 'ADD_LOG', text: `Searching for alternatives: ${track.title}`, level: 'warn' });
-
-            // Auto-skip logic
             setTimeout(() => {
                 triggerCrossfadeRef.current?.();
             }, 1000);
             return;
         }
 
-        console.log(`[Audio Engine] Loading signal: ${resolvedUrl.substring(0, 50)}...`);
+        const isYoutube = resolvedUrl.includes('youtube.com') || resolvedUrl.includes('youtu.be');
+        const el = playerKey === 'A' ? audioA.current : audioB.current;
 
-        if (resolvedUrl.startsWith('blob:') || resolvedUrl.startsWith('data:')) {
-            el.removeAttribute('crossorigin');
+        if (isYoutube) {
+            // Loading into YouTube Engine
+            console.log(`[Audio Engine] YouTube Engine Loading: ${track.title}`);
+            if (playerKey === 'A') {
+                setYtUrlA(resolvedUrl);
+            } else {
+                setYtUrlB(resolvedUrl);
+            }
+            if (el) { el.src = ''; } // Clear audio element
         } else {
-            el.crossOrigin = 'anonymous';
+            // Loading into HTML Audio Engine
+            console.log(`[Audio Engine] Direct Engine Loading: ${resolvedUrl.substring(0, 50)}...`);
+            if (playerKey === 'A') setYtUrlA(null);
+            else setYtUrlB(null);
+
+            if (el) {
+                if (resolvedUrl.startsWith('blob:') || resolvedUrl.startsWith('data:')) {
+                    el.removeAttribute('crossorigin');
+                } else {
+                    el.crossOrigin = 'anonymous';
+                }
+                el.src = resolvedUrl;
+                el.load();
+            }
         }
-        el.src = resolvedUrl;
-        el.load(); // Explicitly trigger load
-    }, [resolveAudioStream]);
+    }, [resolveAudioStream, triggerCrossfadeRef]);
+
+    const PlayerComponent = ReactPlayer as any;
 
     // Pre-buffering: Resolve the next track in the queue in the background
     useEffect(() => {
@@ -639,8 +671,6 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         return () => cancelAnimationFrame(rafId);
     }, [state.micActive, state.duckingIntensity]);
 
-    const triggerCrossfadeRef = useRef<(stationId?: string) => Promise<void>>();
-
     const triggerCrossfade = useCallback(async (targetStationId?: string, overrideTrack?: Track, isSkipBack?: boolean) => {
         const ctx = audioContextRef.current;
         const currentState = stateRef.current;
@@ -662,36 +692,74 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         console.log(`Crossfading to ${targetStation.name} on Player ${nextPlayerId}`);
         dispatch({ type: 'ADD_LOG', text: `Crossfading to next track in ${targetStation.name}...` });
 
-        // Fix: Always prioritize the user's manual queue if it exists
+        // Build the current source URL for the shuffle logic
+        const currentUrl = activePlayer.current === 'A' ? (ytUrlA || audioA.current?.src || '') : (ytUrlB || audioB.current?.src || '');
+
         const manualQueue = stateRef.current.schedule.queue;
-        const nextTrack = overrideTrack || (manualQueue.length > 0 ? manualQueue[0] : getNextTrack(targetStation.id, targetStation.tracks, currentAudio.src));
+        const nextTrack = overrideTrack || (manualQueue.length > 0 ? manualQueue[0] : getNextTrack(targetStation.id, targetStation.tracks, currentUrl));
 
         if (!nextTrack) {
             console.warn('[Audio Engine] No next track available for crossfade');
-            dispatch({ type: 'ADD_LOG', text: 'No tracks in current project. Ingest more music to continue.', level: 'error' });
+            dispatch({ type: 'ADD_LOG', text: 'No tracks in current project.', level: 'error' });
             return;
         }
 
-        // Use the same helper for dynamic crossOrigin
-        await applyAudioSrc(nextAudio, nextTrack);
-
-        // Re-attach listener on new tracks
-        nextAudio.onended = () => {
-            triggerCrossfadeRef.current?.(targetStation.id);
-        };
+        await applyAudioSrc(nextPlayerId, nextTrack);
 
         const FADE_TIME = currentState.crossfadeLength || 2.0;
         const now = ctx.currentTime;
 
-        nextAudio.volume = 1;
-        nextGain.gain.setValueAtTime(0, now);
-        nextGain.gain.linearRampToValueAtTime(1, now + FADE_TIME);
+        // FADE LOGIC
+        if (nextPlayerId === 'B') {
+            setYtVolB(0);
+            setYtPlayingB(true);
+            nextGain.gain.setValueAtTime(0, now);
+            nextGain.gain.linearRampToValueAtTime(1, now + FADE_TIME);
 
-        currentGain.gain.setValueAtTime(1, now);
-        currentGain.gain.linearRampToValueAtTime(0, now + FADE_TIME);
+            // Manual YouTube Crossfade
+            const steps = 20;
+            for (let i = 0; i <= steps; i++) {
+                setTimeout(() => setYtVolB(i / steps), (i / steps) * FADE_TIME * 1000);
+            }
+        } else {
+            setYtVolA(0);
+            setYtPlayingA(true);
+            nextGain.gain.setValueAtTime(0, now);
+            nextGain.gain.linearRampToValueAtTime(1, now + FADE_TIME);
+
+            // Manual YouTube Crossfade
+            const steps = 20;
+            for (let i = 0; i <= steps; i++) {
+                setTimeout(() => setYtVolA(i / steps), (i / steps) * FADE_TIME * 1000);
+            }
+        }
+
+        if (activePlayer.current === 'A') {
+            currentGain.gain.setValueAtTime(1, now);
+            currentGain.gain.linearRampToValueAtTime(0, now + FADE_TIME);
+            const steps = 20;
+            for (let i = 0; i <= steps; i++) {
+                setTimeout(() => setYtVolA(1 - i / steps), (i / steps) * FADE_TIME * 1000);
+            }
+            setTimeout(() => {
+                setYtPlayingA(false);
+                setYtUrlA(null);
+            }, FADE_TIME * 1000 + 100);
+        } else {
+            currentGain.gain.setValueAtTime(1, now);
+            currentGain.gain.linearRampToValueAtTime(0, now + FADE_TIME);
+            const steps = 20;
+            for (let i = 0; i <= steps; i++) {
+                setTimeout(() => setYtVolB(1 - i / steps), (i / steps) * FADE_TIME * 1000);
+            }
+            setTimeout(() => {
+                setYtPlayingB(false);
+                setYtUrlB(null);
+            }, FADE_TIME * 1000 + 100);
+        }
 
         try {
-            await nextAudio.play();
+            if (nextAudio.src) await nextAudio.play();
 
             activePlayer.current = nextPlayerId;
 
@@ -744,9 +812,8 @@ export function RadioProvider({ children }: { children: ReactNode }) {
 
         } catch (e) {
             console.error('Crossfade failed', e);
-            dispatch({ type: 'ADD_LOG', text: 'Crossfade failed, retrying...', level: 'error' });
         }
-    }, [getNextTrack, applyAudioSrc]);
+    }, [getNextTrack, applyAudioSrc, ytUrlA, ytUrlB]);
 
     const skipNext = useCallback(() => {
         triggerCrossfade();
@@ -756,13 +823,11 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         const player = activePlayer.current === 'A' ? audioA.current : audioB.current;
         if (!player) return;
 
-        // If we've played more than 3 seconds, just restart the song
         if (player.currentTime > 3) {
             player.currentTime = 0;
             return;
         }
 
-        // Otherwise try to go to previous song
         const history = stateRef.current.schedule.history;
         if (history.length > 0) {
             const prevTrack = history[history.length - 1];
@@ -795,11 +860,16 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         const gain = activePlayer.current === 'A' ? gainA.current : gainB.current;
 
         if (state.status === 'PLAYING') {
-            player?.pause();
+            if (player) player.pause();
+            setYtPlayingA(false);
+            setYtPlayingB(false);
             dispatch({ type: 'SET_STATUS', status: 'PAUSED' });
         } else {
             if (player) {
-                if (!player.src) {
+                const isYt = activePlayer.current === 'A' ? !!ytUrlA : !!ytUrlB;
+                const hasSrc = isYt || (player && player.src);
+
+                if (!hasSrc) {
                     const s = state.playlists.find((st: Playlist) => st.id === state.activePlaylistId);
                     if (s) {
                         const track = state.schedule.current || getNextTrack(s.id, s.tracks);
@@ -807,33 +877,36 @@ export function RadioProvider({ children }: { children: ReactNode }) {
                             dispatch({ type: 'ADD_LOG', text: 'Nothing to play in this project.', level: 'error' });
                             return;
                         }
-                        await applyAudioSrc(player, track);
-
-                        // Ensure auto-play on track end
-                        player.onended = () => {
-                            triggerCrossfade(s.id);
-                        };
+                        await applyAudioSrc(activePlayer.current, track);
                     }
                 }
+
                 gain?.gain.cancelScheduledValues(ctx!.currentTime);
                 gain?.gain.setValueAtTime(1, ctx!.currentTime);
 
-                player.play().then(() => {
+                if (isYt) {
+                    if (activePlayer.current === 'A') { setYtPlayingA(true); setYtVolA(1); }
+                    else { setYtPlayingB(true); setYtVolB(1); }
                     dispatch({ type: 'SET_STATUS', status: 'PLAYING' });
-                    const currentStation = state.playlists.find(s => s.id === state.activePlaylistId);
-                    if (currentStation && state.schedule.current) {
-                        const track = state.schedule.current;
-                        const text = track.artist && track.artist !== 'Unknown Artist'
-                            ? `${track.title} - ${track.artist}`
-                            : track.title;
-                        dispatch({ type: 'UPDATE_NOW_PLAYING', text });
-                    }
-                }).catch((e) => {
-                    console.error('[Audio Engine] Playback Failed:', e);
-                    dispatch({ type: 'ADD_LOG', text: 'Signal lost. Attempting to recover...', level: 'warn' });
-                    // Auto-skip on failure
-                    setTimeout(() => triggerCrossfade(), 1000);
-                });
+                } else if (player && player.src) {
+                    player.play().then(() => {
+                        dispatch({ type: 'SET_STATUS', status: 'PLAYING' });
+                    }).catch((e) => {
+                        console.error('[Audio Engine] Playback Failed:', e);
+                        dispatch({ type: 'ADD_LOG', text: 'Signal lost. Attempting to recover...', level: 'warn' });
+                        setTimeout(() => triggerCrossfade(), 1000);
+                    });
+                }
+
+                // Track metadata update
+                const currentStation = state.playlists.find(s => s.id === state.activePlaylistId);
+                if (currentStation && state.schedule.current) {
+                    const track = state.schedule.current;
+                    const text = track.artist && track.artist !== 'Unknown Artist'
+                        ? `${track.title} - ${track.artist}`
+                        : track.title;
+                    dispatch({ type: 'UPDATE_NOW_PLAYING', text });
+                }
             }
         }
     };
@@ -842,6 +915,8 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         const player = activePlayer.current === 'A' ? audioA.current : audioB.current;
         player?.pause();
         if (player) player.currentTime = 0;
+        setYtPlayingA(false);
+        setYtPlayingB(false);
         dispatch({ type: 'SET_STATUS', status: 'STOPPED' });
         dispatch({ type: 'ADD_LOG', text: 'Broadcast stopped.' });
     };
@@ -925,6 +1000,30 @@ export function RadioProvider({ children }: { children: ReactNode }) {
                 skipNext,
                 skipPrevious
             }}>
+                <div style={{ display: 'none' }}>
+                    {ytUrlA && (
+                        <PlayerComponent
+                            ref={playerARef}
+                            url={ytUrlA}
+                            playing={ytPlayingA}
+                            volume={ytVolA}
+                            onEnded={() => triggerCrossfade()}
+                            width={0}
+                            height={0}
+                        />
+                    )}
+                    {ytUrlB && (
+                        <PlayerComponent
+                            ref={playerBRef}
+                            url={ytUrlB}
+                            playing={ytPlayingB}
+                            volume={ytVolB}
+                            onEnded={() => triggerCrossfade()}
+                            width={0}
+                            height={0}
+                        />
+                    )}
+                </div>
                 {children}
             </AudioRefsContext.Provider>
         </RadioContext.Provider>

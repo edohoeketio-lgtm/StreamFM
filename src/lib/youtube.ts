@@ -1,9 +1,9 @@
 /**
  * YoutubeService.ts
  * 
- * Provides background audio resolution for tracks lacking Spotify previews.
- * Uses Piped API (privacy-focused YouTube proxy) for searching and 
- * resolving CORS-friendly audio-only streams.
+ * Provides official YouTube playback support.
+ * Instead of extracting direct streams (which is fragile), this service
+ * focuses on finding the best Video ID for a track.
  */
 
 const PIPED_INSTANCES = [
@@ -17,11 +17,9 @@ const PIPED_INSTANCES = [
 ];
 
 let currentInstanceIndex = 0;
-
 const getPipedBase = () => PIPED_INSTANCES[currentInstanceIndex];
 const rotateInstance = () => {
     currentInstanceIndex = (currentInstanceIndex + 1) % PIPED_INSTANCES.length;
-    console.warn(`[YouTube Service] Rotating to instance: ${getPipedBase()}`);
 };
 
 const resolutionCache: Record<string, string> = {};
@@ -32,24 +30,18 @@ export interface YoutubeAudioResult {
 }
 
 export const YoutubeService = {
-    /**
-     * Cache a resolution URL for a track title + artist.
-     */
-    cacheResolution: (title: string, artist: string, url: string) => {
+    cacheResolution: (title: string, artist: string, videoId: string) => {
         const key = `${title}-${artist}`.toLowerCase();
-        resolutionCache[key] = url;
+        resolutionCache[key] = videoId;
     },
 
-    /**
-     * Get a cached resolution URL if it exists.
-     */
     getCachedResolution: (title: string, artist: string) => {
         const key = `${title}-${artist}`.toLowerCase();
         return resolutionCache[key] || null;
     },
+
     /**
-     * Search YouTube for a track by name and artist.
-     * Returns the videoId of the best match.
+     * Search YouTube for a track and return the official Video ID.
      */
     searchTrack: async (title: string, artist: string): Promise<string | null> => {
         const fetchWithRetry = async (retryCount = 1): Promise<string | null> => {
@@ -57,13 +49,16 @@ export const YoutubeService = {
                 const query = encodeURIComponent(`${title} ${artist} topic`);
                 const response = await fetch(`${getPipedBase()}/search?q=${query}&filter=videos`);
 
-                if (!response.ok) throw new Error('YouTube search failed');
+                if (!response.ok) throw new Error('Search failed');
 
                 const data = await response.json();
                 const results = data.items || [];
 
                 if (results.length > 0) {
-                    return results[0].url.split('v=')[1] || results[0].url.split('/').pop() || null;
+                    // Extract video ID from URL or ID property
+                    const url = results[0].url || '';
+                    const id = url.includes('v=') ? url.split('v=')[1] : (url.split('/').pop() || '');
+                    return id.split('&')[0];
                 }
                 return null;
             } catch (err) {
@@ -79,56 +74,21 @@ export const YoutubeService = {
     },
 
     /**
-     * Resolve a YouTube videoId to a direct, playable audio stream URL.
-     */
-    resolveAudioUrl: async (videoId: string): Promise<string | null> => {
-        const fetchWithRetry = async (retryCount = 1): Promise<string | null> => {
-            try {
-                const response = await fetch(`${getPipedBase()}/streams/${videoId}`);
-
-                if (!response.ok) throw new Error('YouTube stream resolution failed');
-
-                const data = await response.json();
-                const audioStreams: { url: string; mimeType: string }[] = data.audioStreams || [];
-
-                const bestAudio = audioStreams.find(s => s.mimeType?.includes('audio/webm')) ||
-                    audioStreams[0];
-
-                return bestAudio?.url || null;
-            } catch (err) {
-                console.error(`[YouTube Service] Stream resolution failed on ${getPipedBase()}:`, err);
-                if (retryCount > 0) {
-                    rotateInstance();
-                    return fetchWithRetry(retryCount - 1);
-                }
-                return null;
-            }
-        };
-        return fetchWithRetry();
-    },
-
-    /**
-     * Combined helper: Name/Artist -> Audio URL
+     * Resolve Track -> YouTube Video URL
      */
     resolveTrack: async (title: string, artist: string): Promise<YoutubeAudioResult | null> => {
-        // Check cache first
-        const cachedUrl = YoutubeService.getCachedResolution(title, artist);
-        if (cachedUrl) {
-            console.log(`[YouTube Service] Using cached resolution for: ${title}`);
-            return { url: cachedUrl, videoId: 'cached' };
+        const cachedId = YoutubeService.getCachedResolution(title, artist);
+        let videoId = cachedId;
+
+        if (!videoId) {
+            videoId = await YoutubeService.searchTrack(title, artist);
+            if (!videoId) return null;
+            YoutubeService.cacheResolution(title, artist, videoId);
         }
 
-        console.log(`[YouTube Service] Resolving full song for: ${title} - ${artist}`);
-
-        const videoId = await YoutubeService.searchTrack(title, artist);
-        if (!videoId) return null;
-
-        const url = await YoutubeService.resolveAudioUrl(videoId);
-        if (!url) return null;
-
-        // Cache for future use
-        YoutubeService.cacheResolution(title, artist, url);
-
-        return { url, videoId };
+        return {
+            url: `https://www.youtube.com/watch?v=${videoId}`,
+            videoId
+        };
     }
 };
