@@ -1,20 +1,21 @@
 /**
  * YoutubeService.ts
  * 
- * Provides official YouTube playback support.
- * Instead of extracting direct streams (which is fragile), this service
- * focuses on finding the best Video ID for a track.
+ * Provides official YouTube playback support with a robust search fallback.
+ * uses a curated list of Piped instances and a CORS proxy fallback to ensure
+ * searching for Video IDs never fails.
  */
 
 const PIPED_INSTANCES = [
     'https://pipedapi.kavin.rocks',
-    'https://pipedapi.leptons.xyz',
+    'https://pipedapi.tokyo.io',
     'https://piped-api.lunar.icu',
-    'https://api-piped.mha.fi',
-    'https://pipedapi-us.kavin.rocks',
-    'https://piped-api.veris.nu',
-    'https://api.piped.no'
+    'https://api.piped.li',
+    'https://pipedapi.official-multimedia-group.de'
 ];
+
+// CORS Proxy for fallback
+const CORS_PROXY = 'https://api.allorigins.win/get?url=';
 
 let currentInstanceIndex = 0;
 const getPipedBase = () => PIPED_INSTANCES[currentInstanceIndex];
@@ -42,48 +43,70 @@ export const YoutubeService = {
 
     /**
      * Search YouTube for a track and return the official Video ID.
+     * Uses a double-fallback strategy: Direct -> CORS Proxy -> Next Instance.
      */
     searchTrack: async (title: string, artist: string): Promise<string | null> => {
-        const fetchWithRetry = async (retryCount = 1): Promise<string | null> => {
-            try {
-                const query = encodeURIComponent(`${title} ${artist} topic`);
-                const response = await fetch(`${getPipedBase()}/search?q=${query}&filter=videos`);
+        const fetchWithRetry = async (retryCount = 2): Promise<string | null> => {
+            const query = encodeURIComponent(`${title} ${artist} topic`);
+            const baseUrl = getPipedBase();
+            const searchUrl = `${baseUrl}/search?q=${query}&filter=videos`;
 
-                if (!response.ok) throw new Error('Search failed');
-
-                const data = await response.json();
+            const parseResults = (data: any) => {
                 const results = data.items || [];
-
                 if (results.length > 0) {
-                    // Extract video ID from URL or ID property
                     const url = results[0].url || '';
                     const id = url.includes('v=') ? url.split('v=')[1] : (url.split('/').pop() || '');
                     return id.split('&')[0];
                 }
                 return null;
+            };
+
+            try {
+                console.log(`[YouTube Search] Trying Direct: ${baseUrl}`);
+                const response = await fetch(searchUrl);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
+                return parseResults(data);
             } catch (err) {
-                console.error(`[YouTube Service] Search failed on ${getPipedBase()}:`, err);
-                if (retryCount > 0) {
-                    rotateInstance();
-                    return fetchWithRetry(retryCount - 1);
+                console.warn(`[YouTube Search] Direct failed on ${baseUrl}. Error: ${err}. Trying Proxy...`);
+
+                // Fallback 1: CORS Proxy
+                try {
+                    const proxyUrl = `${CORS_PROXY}${encodeURIComponent(searchUrl)}`;
+                    const response = await fetch(proxyUrl);
+                    if (!response.ok) throw new Error(`Proxy HTTP ${response.status}`);
+
+                    const proxyData = await response.json();
+                    // allorigins returns the actual JSON string in 'contents'
+                    const actualData = JSON.parse(proxyData.contents);
+                    return parseResults(actualData);
+                } catch (proxyErr) {
+                    console.error(`[YouTube Search] Proxy failed on ${baseUrl}:`, proxyErr);
+
+                    // Fallback 2: Rotate and Retry
+                    if (retryCount > 0) {
+                        rotateInstance();
+                        return fetchWithRetry(retryCount - 1);
+                    }
                 }
-                return null;
             }
+            return null;
         };
+
         return fetchWithRetry();
     },
 
     /**
      * Resolve Track -> YouTube Video URL
      */
-    resolveTrack: async (title: string, artist: string): Promise<YoutubeAudioResult | null> => {
-        const cachedId = YoutubeService.getCachedResolution(title, artist);
+    resolveTrack: async (track: { title: string, artist: string }): Promise<YoutubeAudioResult | null> => {
+        const cachedId = YoutubeService.getCachedResolution(track.title, track.artist);
         let videoId = cachedId;
 
         if (!videoId) {
-            videoId = await YoutubeService.searchTrack(title, artist);
+            videoId = await YoutubeService.searchTrack(track.title, track.artist);
             if (!videoId) return null;
-            YoutubeService.cacheResolution(title, artist, videoId);
+            YoutubeService.cacheResolution(track.title, track.artist, videoId);
         }
 
         return {

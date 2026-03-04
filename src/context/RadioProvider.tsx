@@ -424,7 +424,7 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'ADD_LOG', text: `Resolving full signal: ${track.title}` });
 
         try {
-            const result = await YoutubeService.resolveTrack(track.title, track.artist || 'Unknown Artist');
+            const result = await YoutubeService.resolveTrack(track);
             if (result?.url) {
                 return result.url;
             }
