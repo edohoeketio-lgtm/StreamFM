@@ -418,22 +418,26 @@ export function RadioProvider({ children }: { children: ReactNode }) {
 
         // Check cache first
         const cached = YoutubeService.getCachedResolution(track.title, track.artist || 'Unknown Artist');
-        if (cached) return cached;
+        if (cached) {
+            return `https://www.youtube.com/watch?v=${cached}`;
+        }
 
         // For Spotify tracks, resolve via YouTube
         dispatch({ type: 'ADD_LOG', text: `Resolving full signal: ${track.title}` });
 
         try {
             const result = await YoutubeService.resolveTrack(track);
-            if (result?.url) {
+            // result could be returning the object { url, videoId } depending on recent changes
+            if (result && result.url) {
                 return result.url;
+            } else if (typeof result === 'string') {
+                return `https://www.youtube.com/watch?v=${result}`;
             }
         } catch (error) {
             console.error('[Audio Engine] YouTube Resolution Failed:', error);
         }
 
         // Final fallback: only use original URL if it's a direct mp3 link (p.scdn.co)
-        // Otherwise, return empty so applying handler can skip.
         if (track.url && (track.url.includes('p.scdn.co') || track.url.includes('blob:'))) {
             return track.url;
         }
