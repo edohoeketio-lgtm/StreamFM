@@ -1,3 +1,5 @@
+import ytSearch from 'youtube-sr';
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default async function handler(req: any, res: any) {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -16,47 +18,19 @@ export default async function handler(req: any, res: any) {
             return res.status(400).json({ error: 'Missing title parameter' });
         }
 
-        const query = encodeURIComponent(`${title} ${artist} audio`);
+        const query = `${title} ${artist} audio`;
+        const yt = (ytSearch as any).default || ytSearch;
 
-        const PIPED_INSTANCES = [
-            'https://pipedapi.kavin.rocks',
-            'https://pipedapi.tokyo.io',
-            'https://piped-api.lunar.icu',
-            'https://api.piped.li',
-            'https://pipedapi.official-multimedia-group.de'
-        ];
-
-        let videoId = null;
-
-        for (const baseUrl of PIPED_INSTANCES) {
-            try {
-                const searchUrl = `${baseUrl}/search?q=${query}&filter=videos`;
-                const response = await fetch(searchUrl, {
-                    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
-                });
-
-                if (!response.ok) continue;
-
-                const data = await response.json();
-                const results = data.items || [];
-
-                if (results.length > 0) {
-                    const url = results[0].url || '';
-                    const id = url.includes('v=') ? url.split('v=')[1] : (url.split('/').pop() || '');
-                    videoId = id.split('&')[0];
-                    break;
-                }
-            } catch {
-                console.warn(`[Serverless Search] Failed on ${baseUrl}`);
-                continue;
+        try {
+            const searchResult = await yt.search(query, { limit: 1 });
+            if (searchResult && searchResult.length > 0) {
+                return res.status(200).json({ videoId: searchResult[0].id, source: 'youtube-sr' });
             }
+        } catch (err) {
+            console.warn(`[Serverless Search] youtube-sr failed: ${err}`);
         }
 
-        if (videoId) {
-            return res.status(200).json({ videoId, source: 'piped-api' });
-        }
-
-        return res.status(404).json({ error: 'No videos found across all instances' });
+        return res.status(404).json({ error: 'No videos found on YouTube' });
 
     } catch (e) {
         console.error('[Serverless Search] Fatal Error:', e);
