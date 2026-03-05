@@ -9,6 +9,41 @@ const FX_ASSETS: Record<string, string> = {
     HYPE: 'https://assets.mixkit.co/sfx/preview/mixkit-cinematic-impact-braam-sound-2542.mp3'
 };
 
+const demoTracks: Track[] = [
+    {
+        id: 'demo-1',
+        title: 'Tech House Vibes',
+        artist: 'Mixkit',
+        bpm: 130,
+        url: 'https://assets.mixkit.co/music/preview/mixkit-tech-house-vibes-130.mp3',
+        duration: 180
+    },
+    {
+        id: 'demo-2',
+        title: 'Hip Hop 02',
+        artist: 'Mixkit',
+        bpm: 95,
+        url: 'https://assets.mixkit.co/music/preview/mixkit-hip-hop-02-738.mp3',
+        duration: 180
+    },
+    {
+        id: 'demo-3',
+        title: 'Dance With Me',
+        artist: 'Mixkit',
+        bpm: 120,
+        url: 'https://assets.mixkit.co/music/preview/mixkit-dance-with-me-3.mp3',
+        duration: 180
+    }
+];
+
+const demoPlaylist: Playlist = {
+    id: 'demo-playlist-1',
+    name: 'Demo Playlist',
+    description: 'Royalty-free tracks to test the Pure Web Audio Engine.',
+    tags: ['Demo', 'Electronic'],
+    tracks: demoTracks
+};
+
 const initialState: RadioState = {
     status: 'IDLE',
     broadcastStatus: 'STANDBY',
@@ -26,17 +61,17 @@ const initialState: RadioState = {
     scale: 'Minor',
     programMode: 'Continuous Flow',
 
-    activePlaylistId: '',
-    nowPlaying: 'Create a playlist to get started...',
-    playlists: [],
-    library: [],
+    activePlaylistId: demoPlaylist.id,
+    nowPlaying: 'Tech House Vibes - Mixkit',
+    playlists: [demoPlaylist],
+    library: demoTracks,
 
     listenerCounts: {},
     schedule: {
-        current: null,
-        queue: [],
+        current: demoTracks[0],
+        queue: [demoTracks[1], demoTracks[2]],
         history: [],
-        remaining: 0
+        remaining: 180
     },
 
     logs: [],
