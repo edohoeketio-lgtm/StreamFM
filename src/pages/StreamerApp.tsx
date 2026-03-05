@@ -779,7 +779,7 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
     }, [dispatch]);
 
     return (
-        <aside className="w-80 border-r border-white/5 flex flex-col h-full bg-[#0a0a0a]">
+        <aside className="w-full xl:w-80 shrink-0 border-b xl:border-b-0 xl:border-r border-white/5 flex flex-col xl:h-full bg-[#0a0a0a]">
             {/* Header */}
             <div className="p-8 border-b border-white/5 bg-white/[0.01]">
                 <h2 className="text-[10px] font-black tracking-[0.4em] uppercase text-accent mb-1 px-1">Source Deck</h2>
@@ -1020,7 +1020,7 @@ function MonitorPane() {
     const peak = frame.amplitude.length > 0 ? Math.max(...frame.amplitude.slice(0, 10)) : 0;
 
     return (
-        <main className="flex-1 flex flex-col p-8 gap-8 relative overflow-hidden">
+        <main className="flex-1 min-h-[600px] xl:min-h-0 flex flex-col p-4 xl:p-8 gap-8 relative overflow-hidden">
             {/* Architectural Grid Background */}
             <div className="absolute inset-0 opacity-[0.03] pointer-events-none"
                 style={{ backgroundImage: 'radial-gradient(circle, #fff 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
@@ -1131,7 +1131,7 @@ function ControlPane() {
     };
 
     return (
-        <aside className="w-80 border-l border-white/5 flex flex-col h-full bg-[#0a0a0a]">
+        <aside className="w-full xl:w-80 shrink-0 border-t xl:border-t-0 xl:border-l border-white/5 flex flex-col xl:h-full bg-[#0a0a0a]">
             <div className="p-8 border-b border-white/5 mb-4 flex justify-between items-start">
                 <div>
                     <h2 className="text-[10px] font-black tracking-[0.4em] uppercase text-white/55 mb-1">Master Console</h2>
@@ -1419,7 +1419,7 @@ function StudioLayout() {
         <div className="h-screen bg-black text-white flex flex-col overflow-hidden selection:bg-accent/40 font-sans">
             <Header />
 
-            <div className="flex flex-1 overflow-hidden">
+            <div className="flex flex-col xl:flex-row flex-1 overflow-y-auto xl:overflow-hidden custom-scrollbar">
                 <SidebarPane onOpenLinker={() => setIsLinkerOpen(true)} />
                 <MonitorPane />
                 <ControlPane />

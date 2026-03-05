@@ -345,8 +345,8 @@ export function RadioProvider({ children }: { children: ReactNode }) {
 
     const audioA = useRef<HTMLAudioElement | null>(null);
     const audioB = useRef<HTMLAudioElement | null>(null);
-    const playerARef = useRef<any>(null);
-    const playerBRef = useRef<any>(null);
+    const playerARef = useRef<unknown>(null);
+    const playerBRef = useRef<unknown>(null);
     const gainA = useRef<GainNode | null>(null);
     const gainB = useRef<GainNode | null>(null);
 
@@ -491,7 +491,7 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         return isYoutube;
     }, [resolveAudioStream, triggerCrossfadeRef]);
 
-    const PlayerComponent = ReactPlayer as any;
+    const PlayerComponent = ReactPlayer as unknown as React.ElementType;
 
     // Pre-buffering: Resolve the next track in the queue in the background
     useEffect(() => {
@@ -1012,7 +1012,7 @@ export function RadioProvider({ children }: { children: ReactNode }) {
                 skipNext,
                 skipPrevious
             }}>
-                <div style={{ display: 'none' }}>
+                <div className="absolute opacity-0 pointer-events-none w-[1px] h-[1px] overflow-hidden z-[-100]">
                     {ytUrlA && (
                         <PlayerComponent
                             ref={playerARef}
@@ -1020,8 +1020,13 @@ export function RadioProvider({ children }: { children: ReactNode }) {
                             playing={ytPlayingA}
                             volume={ytVolA}
                             onEnded={() => triggerCrossfade()}
-                            width={0}
-                            height={0}
+                            onError={(e: unknown) => {
+                                console.error('[Player A Error]', e);
+                                dispatch({ type: 'ADD_LOG', text: `Engine Error: Code ${String(e)}`, level: 'error' });
+                            }}
+                            width={320}
+                            height={240}
+                            config={{ youtube: { playerVars: { origin: window.location.origin } } }}
                         />
                     )}
                     {ytUrlB && (
@@ -1031,8 +1036,13 @@ export function RadioProvider({ children }: { children: ReactNode }) {
                             playing={ytPlayingB}
                             volume={ytVolB}
                             onEnded={() => triggerCrossfade()}
-                            width={0}
-                            height={0}
+                            onError={(e: unknown) => {
+                                console.error('[Player B Error]', e);
+                                dispatch({ type: 'ADD_LOG', text: `Engine Error: Code ${String(e)}`, level: 'error' });
+                            }}
+                            width={320}
+                            height={240}
+                            config={{ youtube: { playerVars: { origin: window.location.origin } } }}
                         />
                     )}
                 </div>
