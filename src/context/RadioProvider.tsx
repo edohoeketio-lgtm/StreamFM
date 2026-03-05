@@ -1,6 +1,4 @@
-import { useReducer, useEffect, useRef, useCallback, useState, type ReactNode } from 'react';
-import ReactPlayer from 'react-player';
-import { YoutubeService } from '../lib/youtube';
+import { useReducer, useEffect, useRef, useCallback, type ReactNode } from 'react';
 import { RadioContext, AudioRefsContext } from './RadioContexts';
 import { RadioState, RadioAction, Playlist, MusicSource, Track } from '../types/radio';
 
@@ -345,18 +343,8 @@ export function RadioProvider({ children }: { children: ReactNode }) {
 
     const audioA = useRef<HTMLAudioElement | null>(null);
     const audioB = useRef<HTMLAudioElement | null>(null);
-    const playerARef = useRef<unknown>(null);
-    const playerBRef = useRef<unknown>(null);
     const gainA = useRef<GainNode | null>(null);
     const gainB = useRef<GainNode | null>(null);
-
-    // Volume state for YouTube Players (0-1)
-    const [ytVolA, setYtVolA] = useState(0);
-    const [ytVolB, setYtVolB] = useState(0);
-    const [ytUrlA, setYtUrlA] = useState<string | null>(null);
-    const [ytUrlB, setYtUrlB] = useState<string | null>(null);
-    const [ytPlayingA, setYtPlayingA] = useState(false);
-    const [ytPlayingB, setYtPlayingB] = useState(false);
 
     const activePlayer = useRef<'A' | 'B'>('A');
     const lastPlayedStationId = useRef<string | null>(null);
@@ -410,39 +398,7 @@ export function RadioProvider({ children }: { children: ReactNode }) {
 
     const resolveAudioStream = useCallback(async (track: Track): Promise<string> => {
         if (!track) return '';
-
-        // Local files (blob/data) should play as is
-        if (track.url.startsWith('blob:') || track.url.startsWith('data:')) {
-            return track.url;
-        }
-
-        // Check cache first
-        const cached = YoutubeService.getCachedResolution(track.title, track.artist || 'Unknown Artist');
-        if (cached) {
-            return `https://www.youtube.com/watch?v=${cached}`;
-        }
-
-        // For Spotify tracks, resolve via YouTube
-        dispatch({ type: 'ADD_LOG', text: `Resolving full signal: ${track.title}` });
-
-        try {
-            const result = await YoutubeService.resolveTrack(track);
-            // result could be returning the object { url, videoId } depending on recent changes
-            if (result && result.url) {
-                return result.url;
-            } else if (typeof result === 'string') {
-                return `https://www.youtube.com/watch?v=${result}`;
-            }
-        } catch (error) {
-            console.error('[Audio Engine] YouTube Resolution Failed:', error);
-        }
-
-        // Final fallback: only use original URL if it's a direct mp3 link (p.scdn.co)
-        if (track.url && (track.url.includes('p.scdn.co') || track.url.includes('blob:'))) {
-            return track.url;
-        }
-
-        return ''; // Treat as unresolvable
+        return track.url || '';
     }, []);
 
     const applyAudioSrc = useCallback(async (playerKey: 'A' | 'B', track: Track): Promise<boolean | null> => {
@@ -457,41 +413,23 @@ export function RadioProvider({ children }: { children: ReactNode }) {
             return null;
         }
 
-        const isYoutube = resolvedUrl.includes('youtube.com') || resolvedUrl.includes('youtu.be');
         const el = playerKey === 'A' ? audioA.current : audioB.current;
 
-        if (isYoutube) {
-            // Loading into YouTube Engine
-            console.log(`[Audio Engine] YouTube Engine Loading: ${track.title}`);
-            if (playerKey === 'A') {
-                setYtUrlA(resolvedUrl);
+        // Loading into HTML Audio Engine
+        console.log(`[Audio Engine] Direct Engine Loading: ${resolvedUrl.substring(0, 50)}...`);
+
+        if (el) {
+            if (resolvedUrl.startsWith('blob:') || resolvedUrl.startsWith('data:')) {
+                el.removeAttribute('crossorigin');
             } else {
-                setYtUrlB(resolvedUrl);
+                el.crossOrigin = 'anonymous';
             }
-            if (el) {
-                el.removeAttribute('src');
-                el.load();
-            } // Clear audio element properly
-        } else {
-            // Loading into HTML Audio Engine
-            console.log(`[Audio Engine] Direct Engine Loading: ${resolvedUrl.substring(0, 50)}...`);
-            if (playerKey === 'A') setYtUrlA(null);
-            else setYtUrlB(null);
-
-            if (el) {
-                if (resolvedUrl.startsWith('blob:') || resolvedUrl.startsWith('data:')) {
-                    el.removeAttribute('crossorigin');
-                } else {
-                    el.crossOrigin = 'anonymous';
-                }
-                el.src = resolvedUrl;
-                el.load();
-            }
+            el.src = resolvedUrl;
+            el.load();
         }
-        return isYoutube;
-    }, [resolveAudioStream, triggerCrossfadeRef]);
 
-    const PlayerComponent = ReactPlayer as unknown as React.ElementType;
+        return false;
+    }, [resolveAudioStream, triggerCrossfadeRef]);
 
     // Pre-buffering: Resolve the next track in the queue in the background
     useEffect(() => {
@@ -701,7 +639,7 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'ADD_LOG', text: `Crossfading to next track in ${targetStation.name}...` });
 
         // Build the current source URL for the shuffle logic
-        const currentUrl = activePlayer.current === 'A' ? (ytUrlA || audioA.current?.src || '') : (ytUrlB || audioB.current?.src || '');
+        const currentUrl = activePlayer.current === 'A' ? (audioA.current?.src || '') : (audioB.current?.src || '');
 
         const manualQueue = stateRef.current.schedule.queue;
         const nextTrack = overrideTrack || (manualQueue.length > 0 ? manualQueue[0] : getNextTrack(targetStation.id, targetStation.tracks, currentUrl));
@@ -712,64 +650,31 @@ export function RadioProvider({ children }: { children: ReactNode }) {
             return;
         }
 
-        const isYoutubeNext = await applyAudioSrc(nextPlayerId, nextTrack);
-        if (isYoutubeNext === null) return;
+        const isSuccess = await applyAudioSrc(nextPlayerId, nextTrack);
+        if (isSuccess === null) return;
 
         const FADE_TIME = currentState.crossfadeLength || 2.0;
         const now = ctx.currentTime;
 
         // FADE LOGIC
         if (nextPlayerId === 'B') {
-            setYtVolB(0);
-            setYtPlayingB(true);
             nextGain.gain.setValueAtTime(0, now);
             nextGain.gain.linearRampToValueAtTime(1, now + FADE_TIME);
-
-            // Manual YouTube Crossfade
-            const steps = 20;
-            for (let i = 0; i <= steps; i++) {
-                setTimeout(() => setYtVolB(i / steps), (i / steps) * FADE_TIME * 1000);
-            }
         } else {
-            setYtVolA(0);
-            setYtPlayingA(true);
             nextGain.gain.setValueAtTime(0, now);
             nextGain.gain.linearRampToValueAtTime(1, now + FADE_TIME);
-
-            // Manual YouTube Crossfade
-            const steps = 20;
-            for (let i = 0; i <= steps; i++) {
-                setTimeout(() => setYtVolA(i / steps), (i / steps) * FADE_TIME * 1000);
-            }
         }
 
         if (activePlayer.current === 'A') {
             currentGain.gain.setValueAtTime(1, now);
             currentGain.gain.linearRampToValueAtTime(0, now + FADE_TIME);
-            const steps = 20;
-            for (let i = 0; i <= steps; i++) {
-                setTimeout(() => setYtVolA(1 - i / steps), (i / steps) * FADE_TIME * 1000);
-            }
-            setTimeout(() => {
-                setYtPlayingA(false);
-                setYtUrlA(null);
-            }, FADE_TIME * 1000 + 100);
         } else {
             currentGain.gain.setValueAtTime(1, now);
             currentGain.gain.linearRampToValueAtTime(0, now + FADE_TIME);
-            const steps = 20;
-            for (let i = 0; i <= steps; i++) {
-                setTimeout(() => setYtVolB(1 - i / steps), (i / steps) * FADE_TIME * 1000);
-            }
-            setTimeout(() => {
-                setYtPlayingB(false);
-                setYtUrlB(null);
-            }, FADE_TIME * 1000 + 100);
         }
 
         try {
-            // Only play HTML5 audio if it's NOT a YouTube track AND it actually has a valid source (not falling back to base URL)
-            if (!isYoutubeNext && nextAudio.src && nextAudio.src !== window.location.href) {
+            if (nextAudio.src && nextAudio.src !== window.location.href) {
                 await nextAudio.play();
             }
 
@@ -825,7 +730,7 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         } catch (e) {
             console.error('Crossfade failed', e);
         }
-    }, [getNextTrack, applyAudioSrc, ytUrlA, ytUrlB]);
+    }, [getNextTrack, applyAudioSrc]);
 
     const skipNext = useCallback(() => {
         triggerCrossfade();
@@ -873,13 +778,10 @@ export function RadioProvider({ children }: { children: ReactNode }) {
 
         if (state.status === 'PLAYING') {
             if (player) player.pause();
-            setYtPlayingA(false);
-            setYtPlayingB(false);
             dispatch({ type: 'SET_STATUS', status: 'PAUSED' });
         } else {
             if (player) {
-                const isYt = activePlayer.current === 'A' ? !!ytUrlA : !!ytUrlB;
-                const hasSrc = isYt || (player && player.src);
+                const hasSrc = player && player.src;
 
                 if (!hasSrc) {
                     const s = state.playlists.find((st: Playlist) => st.id === state.activePlaylistId);
@@ -896,11 +798,7 @@ export function RadioProvider({ children }: { children: ReactNode }) {
                 gain?.gain.cancelScheduledValues(ctx!.currentTime);
                 gain?.gain.setValueAtTime(1, ctx!.currentTime);
 
-                if (isYt) {
-                    if (activePlayer.current === 'A') { setYtPlayingA(true); setYtVolA(1); }
-                    else { setYtPlayingB(true); setYtVolB(1); }
-                    dispatch({ type: 'SET_STATUS', status: 'PLAYING' });
-                } else if (player && player.src) {
+                if (player && player.src) {
                     player.play().then(() => {
                         dispatch({ type: 'SET_STATUS', status: 'PLAYING' });
                     }).catch((e) => {
@@ -927,8 +825,6 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         const player = activePlayer.current === 'A' ? audioA.current : audioB.current;
         player?.pause();
         if (player) player.currentTime = 0;
-        setYtPlayingA(false);
-        setYtPlayingB(false);
         dispatch({ type: 'SET_STATUS', status: 'STOPPED' });
         dispatch({ type: 'ADD_LOG', text: 'Broadcast stopped.' });
     };
@@ -1012,40 +908,6 @@ export function RadioProvider({ children }: { children: ReactNode }) {
                 skipNext,
                 skipPrevious
             }}>
-                <div className="absolute opacity-0 pointer-events-none w-[1px] h-[1px] overflow-hidden z-[-100]">
-                    {ytUrlA && (
-                        <PlayerComponent
-                            ref={playerARef}
-                            url={ytUrlA}
-                            playing={ytPlayingA}
-                            volume={ytVolA}
-                            onEnded={() => triggerCrossfade()}
-                            onError={(e: unknown) => {
-                                console.error('[Player A Error]', e);
-                                dispatch({ type: 'ADD_LOG', text: `Engine Error: Code ${String(e)}`, level: 'error' });
-                            }}
-                            width={320}
-                            height={240}
-                            config={{ youtube: { playerVars: { origin: window.location.origin } } }}
-                        />
-                    )}
-                    {ytUrlB && (
-                        <PlayerComponent
-                            ref={playerBRef}
-                            url={ytUrlB}
-                            playing={ytPlayingB}
-                            volume={ytVolB}
-                            onEnded={() => triggerCrossfade()}
-                            onError={(e: unknown) => {
-                                console.error('[Player B Error]', e);
-                                dispatch({ type: 'ADD_LOG', text: `Engine Error: Code ${String(e)}`, level: 'error' });
-                            }}
-                            width={320}
-                            height={240}
-                            config={{ youtube: { playerVars: { origin: window.location.origin } } }}
-                        />
-                    )}
-                </div>
                 {children}
             </AudioRefsContext.Provider>
         </RadioContext.Provider>
