@@ -31,15 +31,14 @@ export function Gateway() {
                         <p className="text-sm text-white/50 font-medium tracking-tight">Access the studio.</p>
                     </Link>
 
-                    {/* Listener Mode */}
-                    <Link to="/listener" className="group relative block w-full aspect-square bg-[#111113] border border-white/10 rounded-[32px] overflow-hidden hover:border-white/30 transition-colors p-8 flex flex-col items-center justify-center text-center">
-                        <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                        <div className="w-16 h-16 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mb-6 text-white group-hover:scale-110 group-hover:bg-white/10 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]">
+                    {/* Listener Mode (Disabled) */}
+                    <button disabled className="group relative block w-full aspect-square bg-[#111113]/50 border border-white/5 rounded-[32px] overflow-hidden p-8 flex flex-col items-center justify-center text-center opacity-50 cursor-not-allowed">
+                        <div className="w-16 h-16 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mb-6 text-white/50">
                             <Headphones size={28} />
                         </div>
-                        <h2 className="text-2xl font-bold tracking-tight text-white mb-2">Listener</h2>
-                        <p className="text-sm text-white/50 font-medium tracking-tight">Tune in live.</p>
-                    </Link>
+                        <h2 className="text-2xl font-bold tracking-tight text-white/50 mb-2">Listener <span className="text-xs ml-1 font-normal tracking-normal text-white/30">(Coming Soon)</span></h2>
+                        <p className="text-sm text-white/30 font-medium tracking-tight">Since we haven't built it yet.</p>
+                    </button>
                 </div>
             </motion.div>
         </div>

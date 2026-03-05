@@ -12,35 +12,43 @@ const FX_ASSETS: Record<string, string> = {
 const demoTracks: Track[] = [
     {
         id: 'demo-1',
-        title: 'Tech House Vibes',
-        artist: 'Mixkit',
-        bpm: 130,
-        url: 'https://assets.mixkit.co/music/preview/mixkit-tech-house-vibes-130.mp3',
-        duration: 180
+        title: 'Birds & the Bees',
+        artist: 'Baby Keem',
+        bpm: 120,
+        url: '/audio/Birds & the Bees - Baby Keem.mp3',
+        duration: 210
     },
     {
         id: 'demo-2',
-        title: 'Hip Hop 02',
-        artist: 'Mixkit',
-        bpm: 95,
-        url: 'https://assets.mixkit.co/music/preview/mixkit-hip-hop-02-738.mp3',
-        duration: 180
+        title: 'Good Flirts',
+        artist: 'Baby Keem',
+        bpm: 120,
+        url: '/audio/Good Flirts - Baby Keem.mp3',
+        duration: 210
     },
     {
         id: 'demo-3',
-        title: 'Dance With Me',
-        artist: 'Mixkit',
+        title: 'Poor Thang',
+        artist: 'J. Cole',
         bpm: 120,
-        url: 'https://assets.mixkit.co/music/preview/mixkit-dance-with-me-3.mp3',
-        duration: 180
+        url: '/audio/Poor Thang - J. Cole.mp3',
+        duration: 210
+    },
+    {
+        id: 'demo-4',
+        title: 'Perfect Enemy',
+        artist: 'Vinnie Paz',
+        bpm: 120,
+        url: '/audio/Perfect Enemy - Vinnie Paz.mp3',
+        duration: 210
     }
 ];
 
 const demoPlaylist: Playlist = {
     id: 'demo-playlist-1',
     name: 'Demo Playlist',
-    description: 'Royalty-free tracks to test the Pure Web Audio Engine.',
-    tags: ['Demo', 'Electronic'],
+    description: 'Local audio files loaded for testing.',
+    tags: ['Demo', 'Local'],
     tracks: demoTracks
 };
 
@@ -62,16 +70,16 @@ const initialState: RadioState = {
     programMode: 'Continuous Flow',
 
     activePlaylistId: demoPlaylist.id,
-    nowPlaying: 'Tech House Vibes - Mixkit',
+    nowPlaying: 'Birds & the Bees - Baby Keem',
     playlists: [demoPlaylist],
     library: demoTracks,
 
     listenerCounts: {},
     schedule: {
         current: demoTracks[0],
-        queue: [demoTracks[1], demoTracks[2]],
+        queue: [demoTracks[1], demoTracks[2], demoTracks[3]],
         history: [],
-        remaining: 180
+        remaining: 210
     },
 
     logs: [],
