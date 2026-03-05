@@ -19,10 +19,10 @@ export default async function handler(req: any, res: any) {
         }
 
         const query = `${title} ${artist} audio`;
-        const yt = (ytSearch as any).default || ytSearch;
+        const yt = (ytSearch as unknown as { default: typeof ytSearch }).default || ytSearch;
 
         try {
-            const searchResult = await yt.search(query, { limit: 1 });
+            const searchResult = await yt.search(query, { limit: 1, type: "video" });
             if (searchResult && searchResult.length > 0) {
                 return res.status(200).json({ videoId: searchResult[0].id, source: 'youtube-sr' });
             }
