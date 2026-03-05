@@ -171,6 +171,14 @@ function radioReducer(state: RadioState, action: RadioAction): RadioState {
             return { ...state, schedule: action.schedule };
         case 'REORDER_QUEUE':
             return { ...state, schedule: { ...state.schedule, queue: action.queue } };
+        case 'FORCE_NEXT':
+            return {
+                ...state,
+                schedule: {
+                    ...state.schedule,
+                    current: action.overrideTrack
+                }
+            };
         case 'SET_BROADCAST_STATUS':
             return { ...state, broadcastStatus: action.status };
         case 'SET_MIC_ACTIVE':

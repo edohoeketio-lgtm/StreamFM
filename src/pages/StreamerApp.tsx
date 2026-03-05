@@ -854,7 +854,17 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
                                 value={track}
                                 dragListener={true}
                                 layout
-                                className="flex items-center gap-4 px-4 py-3 bg-white/[0.02] border border-white/5 hover:border-white/10 hover:bg-white/[0.04] rounded-md group cursor-grab active:cursor-grabbing select-none mb-2 transition-[background-color,border-color] duration-200"
+                                onClick={() => {
+                                    // Remove the track from its current queue position and set as current
+                                    const newQueue = localQueue.filter(t => t.instanceId !== track.instanceId);
+                                    dispatch({ type: 'REORDER_QUEUE', queue: newQueue });
+
+                                    // Force playback of this specific track
+                                    initAudio();
+                                    dispatch({ type: 'ADD_LOG', text: `Forcing playback: ${track.title}` });
+                                    dispatch({ type: 'FORCE_NEXT', overrideTrack: track });
+                                }}
+                                className="flex items-center gap-4 px-4 py-3 bg-white/[0.02] border border-white/5 hover:border-white/10 hover:bg-white/[0.04] rounded-md group cursor-pointer select-none mb-2 transition-[background-color,border-color] duration-200"
                             >
                                 <div className="w-1.5 h-1.5 rounded-full bg-accent/20 group-hover:bg-accent shrink-0" />
                                 <div className="flex flex-col gap-0.5 flex-1 min-w-0 pointer-events-none">
@@ -862,16 +872,30 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
                                     <span className="text-[8px] font-medium text-white/35 truncate uppercase tracking-tighter">{track.artist}</span>
                                 </div>
                                 <span className="text-[8px] font-mono text-white/20 group-hover:text-accent/80 transition-colors pointer-events-none">{track.bpm}</span>
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        dispatch({ type: 'REMOVE_FROM_QUEUE', instanceId: track.instanceId || '' });
-                                    }}
-                                    className="opacity-0 group-hover:opacity-100 p-2 text-white/20 hover:text-red-400 transition-all"
-                                    title="Remove from queue"
-                                >
-                                    ✕
-                                </button>
+
+                                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            // Trigger drag (Handled automatically by framer-motion if dragListener is true on the item, 
+                                            // but we'll add a visual grab handle for clarity)
+                                        }}
+                                        className="p-2 text-white/20 hover:text-white cursor-grab active:cursor-grabbing transition-colors"
+                                        title="Drag to reorder"
+                                    >
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="12" r="1" /><circle cx="9" cy="5" r="1" /><circle cx="9" cy="19" r="1" /><circle cx="15" cy="12" r="1" /><circle cx="15" cy="5" r="1" /><circle cx="15" cy="19" r="1" /></svg>
+                                    </button>
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            dispatch({ type: 'REMOVE_FROM_QUEUE', instanceId: track.instanceId || '' });
+                                        }}
+                                        className="p-2 text-white/20 hover:text-red-400 transition-colors"
+                                        title="Remove from queue"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
                             </Reorder.Item>
                         ))}
                     </Reorder.Group>

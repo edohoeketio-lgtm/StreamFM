@@ -144,4 +144,5 @@ export type RadioAction =
     | { type: 'SET_CROSSFADE_LENGTH'; length: number }
     | { type: 'REMOVE_FROM_QUEUE'; instanceId: string }
     | { type: 'REMOVE_FROM_PLAYLIST'; playlistId: string; instanceId: string }
-    | { type: 'REMOVE_FROM_LIBRARY'; trackId: string };
+    | { type: 'REMOVE_FROM_LIBRARY'; trackId: string }
+    | { type: 'FORCE_NEXT'; overrideTrack: Track };
