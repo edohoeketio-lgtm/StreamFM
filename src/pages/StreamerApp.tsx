@@ -169,9 +169,9 @@ function StudioFader({ id, label, value, onDoubleClick, className }: { id: strin
                 />
             </div>
 
-            {/* Desktop: vertical fader (original design) */}
-            <div className="hidden xl:flex flex-col items-center gap-6 py-4">
-                <div className="flex flex-col items-center gap-1">
+            {/* Desktop: vertical fader (compact) */}
+            <div className="hidden xl:flex flex-col items-center gap-3 py-2">
+                <div className="flex flex-col items-center gap-0.5">
                     <span className={cn("text-[9px] font-black tracking-[0.2em] uppercase transition-colors", isModified ? "text-accent" : "text-white/55")}>
                         {label}
                     </span>
@@ -179,11 +179,11 @@ function StudioFader({ id, label, value, onDoubleClick, className }: { id: strin
                         {Math.round(value * 100)}%
                     </span>
                 </div>
-                <div className="relative h-48 w-8 flex justify-center">
+                <div className="relative h-32 w-8 flex justify-center">
                     <div className="absolute inset-y-0 w-[2px] bg-white/[0.03] rounded-full" />
                     <div className="absolute bottom-1/2 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-white/10 z-0" />
                     <div className="absolute inset-y-0 -left-6 flex flex-col justify-between py-1 pointer-events-none opacity-10">
-                        {[12, 6, 0, -6, -24, '-∞'].map(m => <span key={m.toString()} className="text-[9px] font-mono text-white">{m}</span>)}
+                        {[12, 0, -24, '-∞'].map(m => <span key={m.toString()} className="text-[8px] font-mono text-white">{m}</span>)}
                     </div>
                     <input
                         type="range" min="0" max="1" step="0.01"
@@ -195,14 +195,14 @@ function StudioFader({ id, label, value, onDoubleClick, className }: { id: strin
                     />
                     <motion.div
                         className={cn(
-                            "absolute w-12 h-10 bg-[#151515] border border-white/10 rounded-sm flex flex-col items-center justify-center gap-[2px] pointer-events-none shadow-2xl",
+                            "absolute w-10 h-8 bg-[#151515] border border-white/10 rounded-sm flex flex-col items-center justify-center gap-[2px] pointer-events-none shadow-2xl",
                             isModified && "border-accent/40 bg-accent/5"
                         )}
-                        style={{ bottom: `calc(${value * 100}% - 20px)` }}
+                        style={{ bottom: `calc(${value * 100}% - 16px)` }}
                     >
-                        <div className="w-8 h-[1px] bg-white/5" />
-                        <div className={cn("w-full h-[4px] shadow-inner", isModified ? 'bg-accent' : 'bg-white/10')} />
-                        <div className="w-8 h-[1px] bg-white/5" />
+                        <div className="w-6 h-[1px] bg-white/5" />
+                        <div className={cn("w-full h-[3px] shadow-inner", isModified ? 'bg-accent' : 'bg-white/10')} />
+                        <div className="w-6 h-[1px] bg-white/5" />
                     </motion.div>
                 </div>
             </div>
@@ -1199,7 +1199,7 @@ function ControlPane() {
 
     return (
         <aside className="w-full xl:w-80 shrink-0 border-t xl:border-t-0 xl:border-l border-white/5 flex flex-col xl:h-full bg-[#0a0a0a]">
-            <div className="p-4 md:p-6 xl:p-8 border-b border-white/5 flex justify-between items-center">
+            <div className="p-4 md:p-5 xl:p-6 border-b border-white/5 flex justify-between items-center">
                 <div>
                     <h2 className="text-[10px] font-black tracking-[0.4em] uppercase text-white/55 mb-0.5">Master Console</h2>
                     <p className="text-[8px] font-bold text-accent/60 uppercase">Hardware 4.0</p>
@@ -1217,9 +1217,9 @@ function ControlPane() {
                 </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 md:p-6 xl:p-8 flex flex-col gap-6 xl:gap-0">
+            <div className="flex-1 overflow-y-auto p-4 md:p-5 xl:p-6 flex flex-col gap-5 xl:gap-0">
                 {/* Faders Section */}
-                <div className="flex flex-col gap-3 xl:gap-6 border-b border-white/5 pb-6 xl:pb-10">
+                <div className="flex flex-col gap-3 xl:gap-4 border-b border-white/5 pb-5 xl:pb-6">
                     <SignalLevel label="Ingest Gain" type="mono" />
                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-2 xl:gap-4">
                         <StudioFader id="bpm" label="Tempo" value={(state.bpm - 60) / 120} onDoubleClick={() => resetParam('bpm')} />
@@ -1241,7 +1241,7 @@ function ControlPane() {
                 </div>
 
                 {/* FX Pads */}
-                <div className="space-y-3 xl:mt-10 xl:space-y-6">
+                <div className="space-y-3 xl:mt-6 xl:space-y-4">
                     <h3 className="text-[10px] xl:text-[9px] font-black uppercase tracking-[0.3em] text-white/35">FX Pads</h3>
                     <div className="grid grid-cols-4 xl:grid-cols-2 gap-2">
                         {['AIRHORN', 'REWIND', 'DROP', 'HYPE'].map(fx => (
@@ -1257,7 +1257,7 @@ function ControlPane() {
                 </div>
 
                 {/* Broadcaster Mic */}
-                <div className="space-y-3 xl:mt-12 xl:space-y-6">
+                <div className="space-y-3 xl:mt-6 xl:space-y-4">
                     <h3 className="text-[10px] xl:text-[9px] font-black uppercase tracking-[0.3em] text-white/35">Mic</h3>
                     <div className="flex flex-col gap-4 p-4 xl:p-6 bg-white/[0.02] border border-white/5 rounded-sm">
                         <div className="flex justify-between items-center">
@@ -1303,7 +1303,7 @@ function ControlPane() {
                 </div>
 
                 {/* Signal Levels */}
-                <div className="space-y-3 xl:mt-12">
+                <div className="space-y-3 xl:mt-6">
                     <SignalLevel label="Master Out L" type="left" />
                     <SignalLevel label="Master Out R" type="right" />
                 </div>
