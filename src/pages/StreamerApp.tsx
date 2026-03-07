@@ -570,11 +570,11 @@ function HypeAlert() {
                     initial={{ opacity: 0, y: -20, scale: 0.9 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, scale: 1.1 }}
-                    className="absolute top-4 right-4 z-40"
+                    className="absolute top-2 md:top-4 left-2 right-2 md:left-auto md:right-4 z-40"
                     key={activeAlert.id}
                 >
-                    <div className="bg-amber-400/10 border border-amber-400/40 backdrop-blur-xl p-4 rounded-sm shadow-[0_0_40px_rgba(251,191,36,0.2)] flex items-center gap-4 min-w-[280px]">
-                        <div className="w-12 h-12 rounded-full bg-amber-400 flex items-center justify-center text-black shrink-0 shadow-[0_0_20px_rgba(251,191,36,0.5)]">
+                    <div className="bg-amber-400/10 border border-amber-400/40 backdrop-blur-xl p-3 md:p-4 rounded-sm shadow-[0_0_40px_rgba(251,191,36,0.2)] flex items-center gap-3 md:gap-4 md:min-w-[280px]">
+                        <div className="w-9 h-9 md:w-12 md:h-12 rounded-full bg-amber-400 flex items-center justify-center text-black shrink-0 shadow-[0_0_20px_rgba(251,191,36,0.5)]">
                             <Zap size={20} fill="currentColor" />
                         </div>
                         <div className="flex flex-col">
@@ -1073,7 +1073,7 @@ function MonitorPane() {
     const peak = frame.amplitude.length > 0 ? Math.max(...frame.amplitude.slice(0, 10)) : 0;
 
     return (
-        <main className="flex-1 min-h-[600px] xl:min-h-0 flex flex-col p-4 xl:p-8 gap-8 relative overflow-hidden">
+        <main className="flex-1 min-h-[300px] md:min-h-[600px] xl:min-h-0 flex flex-col p-3 md:p-4 xl:p-8 gap-4 md:gap-8 relative overflow-hidden">
             {/* Architectural Grid Background */}
             <div className="absolute inset-0 opacity-[0.03] pointer-events-none"
                 style={{ backgroundImage: 'radial-gradient(circle, #fff 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
@@ -1107,8 +1107,8 @@ function MonitorPane() {
                             exit={{ opacity: 0, y: -10 }}
                             className="flex flex-col items-center"
                         >
-                            <span className="text-[10px] font-black uppercase tracking-[1em] text-white/35 mb-6">Current Signal</span>
-                            <h1 className="text-7xl font-black tracking-tighter text-white uppercase leading-none max-w-2xl px-12">
+                            <span className="text-[10px] font-black uppercase tracking-[1em] text-white/35 mb-3 md:mb-6 hidden md:block">Current Signal</span>
+                            <h1 className="text-3xl md:text-5xl xl:text-7xl font-black tracking-tighter text-white uppercase leading-none max-w-2xl px-4 md:px-12">
                                 {state.nowPlaying || "Ingest required"}
                             </h1>
                         </motion.div>
@@ -1121,8 +1121,8 @@ function MonitorPane() {
                 )}
             </div>
 
-            {/* Bottom Interaction HUD */}
-            <div className="flex justify-between items-end z-10 px-4">
+            {/* Bottom Interaction HUD — hidden on mobile, full on desktop */}
+            <div className="hidden md:flex justify-between items-end z-10 px-4">
                 <div className="flex gap-12">
                     <div className="flex flex-col gap-2">
                         <span className="text-[8px] font-black text-white/35 uppercase tracking-widest">Latency</span>
