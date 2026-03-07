@@ -140,57 +140,71 @@ function SignalLevel({ label, type }: { label: string, type: 'left' | 'right' | 
 /* ─── Studio Fader ─── */
 function StudioFader({ id, label, value, onDoubleClick, className }: { id: string; label: string; value: number; onDoubleClick: () => void; className?: string }) {
     const { dispatch } = useRadio();
-    // Default for Tempo is roughly 0.5 (120bpm), others are 1.0
     const isModified = id === 'bpm' ? Math.round(value * 100) !== 50 : Math.round(value * 100) !== 100;
 
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = Number(e.target.value);
+        if (id === 'bpm') dispatch({ type: 'UPDATE_PARAMS', payload: { bpm: val * 120 + 60 } });
+        else dispatch({ type: 'UPDATE_PARAMS', payload: { [id]: val } });
+    };
+
     return (
-        <div className={cn("flex flex-col items-center gap-6 group py-4", className)}>
-            <div className="flex flex-col items-center gap-1">
-                <span className={cn("text-[9px] font-black tracking-[0.2em] uppercase transition-colors", isModified ? "text-accent" : "text-white/55")}>
-                    {label}
-                </span>
-                <span className="text-[10px] font-mono font-bold text-white/35 tabular-nums">
-                    {Math.round(value * 100)}%
-                </span>
-            </div>
-
-            <div className="relative h-48 w-8 flex justify-center">
-                {/* Visual Rail */}
-                <div className="absolute inset-y-0 w-[2px] bg-white/[0.03] rounded-full" />
-
-                {/* Center Point Indicator (Normalization) */}
-                <div className="absolute bottom-1/2 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-white/10 z-0" />
-
-                {/* Level Scale */}
-                <div className="absolute inset-y-0 -left-6 flex flex-col justify-between py-1 pointer-events-none opacity-10">
-                    {[12, 6, 0, -6, -24, '-∞'].map(m => <span key={m.toString()} className="text-[9px] font-mono text-white">{m}</span>)}
+        <div className={cn("group", className)}>
+            {/* Mobile: horizontal slider */}
+            <div className="flex xl:hidden flex-col gap-2 p-3 bg-white/[0.02] border border-white/5 rounded-sm">
+                <div className="flex justify-between items-center">
+                    <span className={cn("text-[10px] font-black tracking-[0.15em] uppercase", isModified ? "text-accent" : "text-white/55")}>
+                        {label}
+                    </span>
+                    <span className="text-[11px] font-mono font-bold text-white/40 tabular-nums">
+                        {Math.round(value * 100)}%
+                    </span>
                 </div>
-
                 <input
                     type="range" min="0" max="1" step="0.01"
                     value={value}
                     onDoubleClick={onDoubleClick}
-                    onChange={(e) => {
-                        const val = Number(e.target.value);
-                        if (id === 'bpm') dispatch({ type: 'UPDATE_PARAMS', payload: { bpm: val * 120 + 60 } });
-                        else dispatch({ type: 'UPDATE_PARAMS', payload: { [id]: val } });
-                    }}
-                    title="Double-click to reset"
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-ns-resize z-10 [appearance:slider-vertical]"
+                    onChange={handleChange}
+                    className={cn("w-full h-1.5 rounded-full appearance-none bg-white/5", isModified ? "accent-accent" : "accent-white")}
                 />
+            </div>
 
-                {/* Precision Thumb */}
-                <motion.div
-                    className={cn(
-                        "absolute w-12 h-10 bg-[#151515] border border-white/10 rounded-sm flex flex-col items-center justify-center gap-[2px] pointer-events-none shadow-2xl",
-                        isModified && "border-accent/40 bg-accent/5"
-                    )}
-                    style={{ bottom: `calc(${value * 100}% - 20px)` }}
-                >
-                    <div className="w-8 h-[1px] bg-white/5" />
-                    <div className={cn("w-full h-[4px] shadow-inner", isModified ? 'bg-accent' : 'bg-white/10')} />
-                    <div className="w-8 h-[1px] bg-white/5" />
-                </motion.div>
+            {/* Desktop: vertical fader (original design) */}
+            <div className="hidden xl:flex flex-col items-center gap-6 py-4">
+                <div className="flex flex-col items-center gap-1">
+                    <span className={cn("text-[9px] font-black tracking-[0.2em] uppercase transition-colors", isModified ? "text-accent" : "text-white/55")}>
+                        {label}
+                    </span>
+                    <span className="text-[10px] font-mono font-bold text-white/35 tabular-nums">
+                        {Math.round(value * 100)}%
+                    </span>
+                </div>
+                <div className="relative h-48 w-8 flex justify-center">
+                    <div className="absolute inset-y-0 w-[2px] bg-white/[0.03] rounded-full" />
+                    <div className="absolute bottom-1/2 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-white/10 z-0" />
+                    <div className="absolute inset-y-0 -left-6 flex flex-col justify-between py-1 pointer-events-none opacity-10">
+                        {[12, 6, 0, -6, -24, '-∞'].map(m => <span key={m.toString()} className="text-[9px] font-mono text-white">{m}</span>)}
+                    </div>
+                    <input
+                        type="range" min="0" max="1" step="0.01"
+                        value={value}
+                        onDoubleClick={onDoubleClick}
+                        onChange={handleChange}
+                        title="Double-click to reset"
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-ns-resize z-10 [appearance:slider-vertical]"
+                    />
+                    <motion.div
+                        className={cn(
+                            "absolute w-12 h-10 bg-[#151515] border border-white/10 rounded-sm flex flex-col items-center justify-center gap-[2px] pointer-events-none shadow-2xl",
+                            isModified && "border-accent/40 bg-accent/5"
+                        )}
+                        style={{ bottom: `calc(${value * 100}% - 20px)` }}
+                    >
+                        <div className="w-8 h-[1px] bg-white/5" />
+                        <div className={cn("w-full h-[4px] shadow-inner", isModified ? 'bg-accent' : 'bg-white/10')} />
+                        <div className="w-8 h-[1px] bg-white/5" />
+                    </motion.div>
+                </div>
             </div>
         </div>
     );
@@ -1185,9 +1199,9 @@ function ControlPane() {
 
     return (
         <aside className="w-full xl:w-80 shrink-0 border-t xl:border-t-0 xl:border-l border-white/5 flex flex-col xl:h-full bg-[#0a0a0a]">
-            <div className="p-8 border-b border-white/5 mb-4 flex justify-between items-start">
+            <div className="p-4 md:p-6 xl:p-8 border-b border-white/5 flex justify-between items-center">
                 <div>
-                    <h2 className="text-[10px] font-black tracking-[0.4em] uppercase text-white/55 mb-1">Master Console</h2>
+                    <h2 className="text-[10px] font-black tracking-[0.4em] uppercase text-white/55 mb-0.5">Master Console</h2>
                     <p className="text-[8px] font-bold text-accent/60 uppercase">Hardware 4.0</p>
                 </div>
                 <button
@@ -1199,40 +1213,42 @@ function ControlPane() {
                     }}
                     className="text-[8px] font-black uppercase tracking-widest text-white/30 hover:text-accent border border-white/5 px-2 py-1 rounded-sm bg-white/[0.02] transition-all"
                 >
-                    [RESET ALL]
+                    RESET
                 </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-8 flex flex-col">
-                <div className="flex flex-col gap-6 border-b border-white/5 pb-10">
+            <div className="flex-1 overflow-y-auto p-4 md:p-6 xl:p-8 flex flex-col gap-6 xl:gap-0">
+                {/* Faders Section */}
+                <div className="flex flex-col gap-3 xl:gap-6 border-b border-white/5 pb-6 xl:pb-10">
                     <SignalLevel label="Ingest Gain" type="mono" />
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-2 xl:gap-4">
                         <StudioFader id="bpm" label="Tempo" value={(state.bpm - 60) / 120} onDoubleClick={() => resetParam('bpm')} />
                         <StudioFader id="brightness" label="EQ" value={state.brightness} onDoubleClick={() => resetParam('brightness')} />
-                        <StudioFader id="density" label="Depth" value={state.density} onDoubleClick={() => resetParam('density')} className="col-span-2" />
-                        <div className="col-span-2 flex flex-col gap-2 mt-2 p-3 bg-white/[0.02] border border-white/5 rounded-sm">
-                            <div className="flex justify-between text-[8px] font-bold text-amber-400/60 uppercase tracking-widest">
-                                <span>Crossfade</span>
-                                <span>{state.crossfadeLength.toFixed(1)}s</span>
-                            </div>
-                            <input
-                                type="range" min="0.1" max="5" step="0.1"
-                                value={state.crossfadeLength}
-                                onChange={(e) => dispatch({ type: 'SET_CROSSFADE_LENGTH', length: Number(e.target.value) })}
-                                className="w-full accent-amber-400 bg-white/5 h-1 rounded-full appearance-none"
-                            />
+                        <StudioFader id="density" label="Depth" value={state.density} onDoubleClick={() => resetParam('density')} className="xl:col-span-2" />
+                    </div>
+                    <div className="flex flex-col gap-2 p-3 bg-white/[0.02] border border-white/5 rounded-sm">
+                        <div className="flex justify-between text-[8px] font-bold text-amber-400/60 uppercase tracking-widest">
+                            <span>Crossfade</span>
+                            <span>{state.crossfadeLength.toFixed(1)}s</span>
                         </div>
+                        <input
+                            type="range" min="0.1" max="5" step="0.1"
+                            value={state.crossfadeLength}
+                            onChange={(e) => dispatch({ type: 'SET_CROSSFADE_LENGTH', length: Number(e.target.value) })}
+                            className="w-full accent-amber-400 bg-white/5 h-1 rounded-full appearance-none"
+                        />
                     </div>
                 </div>
 
-                <div className="mt-10 space-y-6">
-                    <h3 className="text-[9px] font-black uppercase tracking-[0.3em] text-white/35">Integrated FX Pads</h3>
-                    <div className="grid grid-cols-2 gap-2.5">
+                {/* FX Pads */}
+                <div className="space-y-3 xl:mt-10 xl:space-y-6">
+                    <h3 className="text-[10px] xl:text-[9px] font-black uppercase tracking-[0.3em] text-white/35">FX Pads</h3>
+                    <div className="grid grid-cols-4 xl:grid-cols-2 gap-2">
                         {['AIRHORN', 'REWIND', 'DROP', 'HYPE'].map(fx => (
                             <button
                                 key={fx}
                                 onClick={() => handleFXTrigger(fx)}
-                                className="h-16 bg-white/[0.02] border border-white/5 rounded-sm text-[10px] font-black uppercase tracking-[0.2em] text-white/55 hover:text-accent hover:border-accent/40 hover:bg-accent/5 transition-all active:translate-y-[1px]"
+                                className="h-12 xl:h-16 bg-white/[0.02] border border-white/5 rounded-sm text-[9px] xl:text-[10px] font-black uppercase tracking-[0.15em] text-white/55 hover:text-accent hover:border-accent/40 hover:bg-accent/5 transition-all active:translate-y-[1px]"
                             >
                                 {fx}
                             </button>
@@ -1240,24 +1256,25 @@ function ControlPane() {
                     </div>
                 </div>
 
-                <div className="mt-12 space-y-6">
-                    <h3 className="text-[9px] font-black uppercase tracking-[0.3em] text-white/35">Broadcaster Mic</h3>
-                    <div className="flex flex-col gap-6 p-6 bg-white/[0.02] border border-white/5 rounded-sm">
+                {/* Broadcaster Mic */}
+                <div className="space-y-3 xl:mt-12 xl:space-y-6">
+                    <h3 className="text-[10px] xl:text-[9px] font-black uppercase tracking-[0.3em] text-white/35">Mic</h3>
+                    <div className="flex flex-col gap-4 p-4 xl:p-6 bg-white/[0.02] border border-white/5 rounded-sm">
                         <div className="flex justify-between items-center">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-white/70">MIC Status</span>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-white/70">Status</span>
                             <button
                                 onClick={toggleMic}
                                 className={cn(
-                                    "px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-widest transition-all",
+                                    "px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all",
                                     state.micActive ? "bg-accent text-white shadow-[0_0_20px_rgba(255,45,85,0.4)]" : "bg-white/5 text-white/35 border border-white/10"
                                 )}
                             >
-                                {state.micActive ? 'LIVE' : 'OFFLINE'}
+                                {state.micActive ? 'LIVE' : 'OFF'}
                             </button>
                         </div>
 
-                        <div className="space-y-4">
-                            <div className="flex flex-col gap-2">
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="flex flex-col gap-1.5">
                                 <div className="flex justify-between text-[8px] font-bold text-white/35 uppercase tracking-widest">
                                     <span>Gain</span>
                                     <span>{Math.round(state.micGain * 100)}%</span>
@@ -1269,10 +1286,9 @@ function ControlPane() {
                                     className="w-full accent-accent bg-white/5 h-1 rounded-full appearance-none"
                                 />
                             </div>
-
-                            <div className="flex flex-col gap-2">
+                            <div className="flex flex-col gap-1.5">
                                 <div className="flex justify-between text-[8px] font-bold text-white/35 uppercase tracking-widest">
-                                    <span>Ducking</span>
+                                    <span>Duck</span>
                                     <span>{Math.round(state.duckingIntensity * 100)}%</span>
                                 </div>
                                 <input
@@ -1286,12 +1302,13 @@ function ControlPane() {
                     </div>
                 </div>
 
-                <div className="mt-12 space-y-4">
+                {/* Signal Levels */}
+                <div className="space-y-3 xl:mt-12">
                     <SignalLevel label="Master Out L" type="left" />
                     <SignalLevel label="Master Out R" type="right" />
                 </div>
 
-                <button className="w-full mt-auto py-5 border border-white/5 bg-transparent rounded-sm text-[9px] font-black uppercase tracking-[0.4em] text-white/55 hover:text-accent hover:border-accent/40 transition-all">
+                <button className="w-full mt-4 xl:mt-auto py-4 xl:py-5 border border-white/5 bg-transparent rounded-sm text-[9px] font-black uppercase tracking-[0.4em] text-white/55 hover:text-accent hover:border-accent/40 transition-all">
                     Release Control
                 </button>
             </div>
