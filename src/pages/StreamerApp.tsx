@@ -20,12 +20,20 @@ function getTrackGradient(title: string): string {
     return `linear-gradient(135deg, hsl(${h1}, 70%, 50%), hsl(${h2}, 60%, 40%))`;
 }
 
+function getTrackHue(title: string): number {
+    let hash = 0;
+    for (let i = 0; i < title.length; i++) {
+        hash = title.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return Math.abs(hash % 360);
+}
+
 /* ═══════════════════════════════════════════════════════════════
    PREMIUM STUDIO COMPONENTS (Architectural Precision)
    ═══════════════════════════════════════════════════════════════ */
 
 /* ─── Spectral Visualizer (Canvas Driven) ─── */
-function SpectralVisualizer({ isPlaying }: { isPlaying: boolean }) {
+function SpectralVisualizer({ isPlaying, trackHue }: { isPlaying: boolean; trackHue: number }) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const audioFrame = useAudioReal();
 
@@ -43,46 +51,44 @@ function SpectralVisualizer({ isPlaying }: { isPlaying: boolean }) {
             ctx.clearRect(0, 0, width, height);
 
             if (isPlaying) {
-                // Draw Frequency Bars
                 const bars = audioFrame.amplitude;
                 const barWidth = width / bars.length;
 
-                ctx.beginPath();
-                ctx.lineWidth = 2;
-                ctx.strokeStyle = '#ff2d55';
-
+                // Track-colored frequency bars
                 bars.forEach((amp, i) => {
                     const x = i * barWidth;
-                    const h = amp * height * 0.8;
+                    const h = amp * height * 0.85;
                     const y = height / 2;
+                    const alpha = 0.3 + amp * 0.7;
 
+                    ctx.beginPath();
+                    ctx.lineWidth = 2.5;
+                    ctx.strokeStyle = `hsla(${trackHue}, 70%, 55%, ${alpha})`;
                     ctx.moveTo(x, y - h / 2);
                     ctx.lineTo(x, y + h / 2);
+                    ctx.stroke();
                 });
-                ctx.stroke();
 
-                // Draw Waveform Line (overlay)
+                // Waveform overlay
                 const wave = audioFrame.waveform;
                 ctx.beginPath();
-                ctx.lineWidth = 1;
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-
+                ctx.lineWidth = 1.5;
+                ctx.strokeStyle = `hsla(${trackHue}, 60%, 70%, 0.3)`;
                 const waveStep = width / wave.length;
                 wave.forEach((p, i) => {
                     const x = i * waveStep;
-                    const y = height / 2 + p * height * 0.3;
+                    const y = height / 2 + p * height * 0.35;
                     if (i === 0) ctx.moveTo(x, y);
                     else ctx.lineTo(x, y);
                 });
                 ctx.stroke();
 
-                // Subtle Glow
-                ctx.shadowBlur = 10;
-                ctx.shadowColor = 'rgba(255, 45, 85, 0.4)';
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = `hsla(${trackHue}, 70%, 50%, 0.4)`;
             } else {
                 ctx.beginPath();
                 ctx.lineWidth = 1;
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
                 ctx.moveTo(0, height / 2);
                 ctx.lineTo(width, height / 2);
                 ctx.stroke();
@@ -93,12 +99,19 @@ function SpectralVisualizer({ isPlaying }: { isPlaying: boolean }) {
 
         render();
         return () => cancelAnimationFrame(animationFrameId);
-    }, [isPlaying, audioFrame]);
+    }, [isPlaying, audioFrame, trackHue]);
 
     return (
-        <div className="absolute inset-0 bg-black flex items-center justify-center p-8 overflow-hidden rounded-2xl hardware-inset">
-            <canvas ref={canvasRef} width={800} height={400} className="w-full h-full opacity-60" />
-            <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-black via-transparent to-black" />
+        <div className="absolute inset-0 bg-black flex items-center justify-center overflow-hidden rounded-2xl hardware-inset">
+            <canvas ref={canvasRef} width={800} height={400} className="w-full h-full opacity-90" />
+            <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-black/80 via-transparent to-black/60" />
+            {/* Track-colored ambient glow */}
+            {isPlaying && (
+                <div
+                    className="absolute inset-0 pointer-events-none opacity-[0.08]"
+                    style={{ background: `radial-gradient(ellipse at center, hsl(${trackHue}, 70%, 50%), transparent 70%)` }}
+                />
+            )}
         </div>
     );
 }
@@ -853,28 +866,36 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
                 {/* ON AIR — always visible */}
                 <div className="px-4 md:px-6 mb-4 md:mb-8">
                     <h3 className="text-[10px] md:text-[9px] font-black uppercase tracking-[0.2em] text-white/25 mb-3 px-1">On Air</h3>
-                    <div className="p-3 md:p-4 bg-white/[0.03] border border-white/5 rounded-lg group hover:border-accent/30 transition-all">
+                    <div
+                        className="p-3 md:p-4 rounded-lg group transition-all relative overflow-hidden"
+                        style={{
+                            border: activeTrack ? `1px solid hsla(${getTrackHue(activeTrack.title)}, 60%, 50%, 0.25)` : '1px solid rgba(255,255,255,0.05)',
+                            background: activeTrack ? `linear-gradient(135deg, hsla(${getTrackHue(activeTrack.title)}, 60%, 50%, 0.06), transparent)` : 'rgba(255,255,255,0.03)',
+                            boxShadow: activeTrack ? `0 0 30px hsla(${getTrackHue(activeTrack.title)}, 60%, 50%, 0.08)` : 'none'
+                        }}
+                    >
                         {activeTrack ? (
                             <div className="space-y-2">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 md:w-9 md:h-9 rounded-md shrink-0" style={{ background: getTrackGradient(activeTrack.title) }} />
+                                    <div className="w-10 h-10 md:w-11 md:h-11 rounded-md shrink-0 shadow-lg" style={{ background: getTrackGradient(activeTrack.title) }} />
                                     <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-                                        <span className="text-[12px] md:text-[11px] font-bold text-white truncate leading-tight group-hover:text-accent transition-colors">
+                                        <span className="text-[13px] md:text-[12px] font-bold text-white truncate leading-tight">
                                             {activeTrack.title}
                                         </span>
-                                        <span className="text-[10px] md:text-[9px] font-medium text-white/40 truncate">
+                                        <span className="text-[10px] md:text-[9px] font-medium text-white/50 truncate">
                                             {activeTrack.artist}
                                         </span>
                                     </div>
-                                    <div className="text-[9px] font-mono font-bold text-accent px-1.5 py-0.5 bg-accent/10 rounded-sm hidden md:block">
-                                        {activeTrack.bpm}
+                                    <div className="text-[9px] font-mono font-bold text-white px-2 py-1 rounded-full hidden md:flex items-center gap-1" style={{ background: `hsla(${getTrackHue(activeTrack.title)}, 60%, 50%, 0.2)` }}>
+                                        {activeTrack.bpm} <span className="text-[7px] text-white/50">BPM</span>
                                     </div>
                                 </div>
                                 <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
                                     <motion.div
                                         initial={{ width: '0%' }}
                                         animate={{ width: `${(1 - state.schedule.remaining / 180) * 100}%` }}
-                                        className="h-full bg-accent"
+                                        className="h-full rounded-full"
+                                        style={{ background: `hsl(${getTrackHue(activeTrack.title)}, 60%, 50%)` }}
                                     />
                                 </div>
                             </div>
@@ -914,7 +935,16 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
                                     <span className="text-[11px] md:text-[10px] font-bold text-white/80 truncate group-hover:text-white transition-colors">{track.title}</span>
                                     <span className="text-[9px] md:text-[8px] font-medium text-white/35 truncate uppercase tracking-tighter">{track.artist}</span>
                                 </div>
-                                <span className="text-[8px] font-mono text-white/20 group-hover:text-accent/80 transition-colors pointer-events-none hidden md:inline">{track.bpm}</span>
+                                <span className="text-[8px] font-mono font-bold px-1.5 py-0.5 rounded-full transition-colors pointer-events-none hidden md:inline"
+                                    style={{
+                                        background: activeTrack && Math.abs((track.bpm || 0) - (activeTrack.bpm || 0)) <= 5
+                                            ? 'rgba(34,197,94,0.15)'
+                                            : 'rgba(251,191,36,0.15)',
+                                        color: activeTrack && Math.abs((track.bpm || 0) - (activeTrack.bpm || 0)) <= 5
+                                            ? 'rgb(74,222,128)'
+                                            : 'rgb(251,191,36)'
+                                    }}
+                                >{track.bpm}</span>
 
                                 {/* Actions - hidden on mobile, visible on hover on desktop */}
                                 <div className="hidden md:flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
@@ -1078,6 +1108,11 @@ function MonitorPane() {
     const { togglePlay } = useAudioEngine();
     const isPlaying = state.status === 'PLAYING';
     const frame = useAudioReal();
+    const currentTrack = state.schedule.current;
+    const trackHue = currentTrack ? getTrackHue(currentTrack.title) : 0;
+    const remaining = state.schedule.remaining;
+    const minutes = Math.floor(remaining / 60);
+    const seconds = Math.floor(remaining % 60);
 
     const handleCountdownComplete = useCallback(() => {
         dispatch({ type: 'SET_BROADCAST_STATUS', status: 'LIVE' });
@@ -1087,97 +1122,104 @@ function MonitorPane() {
     const peak = frame.amplitude.length > 0 ? Math.max(...frame.amplitude.slice(0, 10)) : 0;
 
     return (
-        <main className="flex-1 min-h-[300px] md:min-h-[600px] xl:min-h-0 flex flex-col p-3 md:p-4 xl:p-8 gap-4 md:gap-8 relative overflow-hidden">
-            {/* Architectural Grid Background */}
-            <div className="absolute inset-0 opacity-[0.03] pointer-events-none"
-                style={{ backgroundImage: 'radial-gradient(circle, #fff 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
-
-            <div className="flex-1 relative">
-                <div className="absolute top-4 left-4 z-10 flex gap-4">
+        <main className="flex-1 min-h-[300px] md:min-h-[600px] xl:min-h-0 flex flex-col relative overflow-hidden">
+            {/* Thin Stats Strip */}
+            <div className="hidden md:flex items-center justify-between px-6 py-2 border-b border-white/5 bg-white/[0.01] z-10 shrink-0">
+                <div className="flex items-center gap-6">
+                    {/* Dramatic LIVE Badge */}
                     <div className={cn(
-                        "px-3 py-1 rounded-sm border text-[10px] font-black tracking-widest uppercase transition-all duration-500",
-                        isPlaying ? "border-accent text-accent bg-accent/5 shadow-[0_0_20px_rgba(255,45,85,0.2)]" : "border-white/10 text-white/20"
+                        "flex items-center gap-2 px-3 py-1 rounded-sm border transition-all duration-500",
+                        isPlaying
+                            ? "border-red-500/50 bg-red-500/10 shadow-[0_0_25px_rgba(239,68,68,0.3)]"
+                            : "border-white/10 bg-transparent"
                     )}>
-                        LIVE
+                        <div className="relative flex h-2 w-2">
+                            {isPlaying && (
+                                <span className="absolute inline-flex h-full w-full rounded-full bg-red-500 animate-ping opacity-75" />
+                            )}
+                            <span className={cn(
+                                "relative inline-flex rounded-full h-2 w-2",
+                                isPlaying ? "bg-red-500" : "bg-white/20"
+                            )} />
+                        </div>
+                        <span className={cn(
+                            "text-[10px] font-black tracking-[0.3em] uppercase",
+                            isPlaying ? "text-red-400" : "text-white/20"
+                        )}>
+                            {isPlaying ? 'LIVE' : 'STBY'}
+                        </span>
                     </div>
-                </div>
 
-                <div className="absolute top-4 right-4 z-10 text-right">
-                    <span className="text-[8px] font-black tracking-widest text-white/35 uppercase block mb-1">Master Node</span>
-                    <span className="text-[10px] font-mono font-bold text-white/85">UK_W2_XTC</span>
-                </div>
-
-                <SpectralVisualizer isPlaying={isPlaying} />
-                <InteractionFeed />
-                <HypeAlert />
-
-                {/* Main Signal Identification */}
-                <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
-                    <AnimatePresence mode="wait">
-                        <motion.div
-                            key={state.nowPlaying}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -10 }}
-                            className="flex flex-col items-center"
-                        >
-                            <span className="text-[10px] font-black uppercase tracking-[1em] text-white/35 mb-3 md:mb-6 hidden md:block">Current Signal</span>
-                            <h1 className="text-3xl md:text-5xl xl:text-7xl font-black tracking-tighter text-white uppercase leading-none max-w-2xl px-4 md:px-12">
-                                {state.nowPlaying || "Ingest required"}
-                            </h1>
-                        </motion.div>
-                    </AnimatePresence>
-                </div>
-
-                {/* Countdown Overlay */}
-                {state.broadcastStatus === 'COUNTDOWN' && (
-                    <GoLiveCountdown onComplete={handleCountdownComplete} />
-                )}
-            </div>
-
-            {/* Bottom Interaction HUD — hidden on mobile, full on desktop */}
-            <div className="hidden md:flex justify-between items-end z-10 px-4">
-                <div className="flex gap-12">
-                    <div className="flex flex-col gap-2">
-                        <span className="text-[8px] font-black text-white/35 uppercase tracking-widest">Latency</span>
-                        <span className="text-xs font-mono font-bold text-accent/80">0.02ms</span>
+                    <div className="flex items-center gap-1.5 text-[9px] font-mono text-white/40">
+                        <span className="font-black tracking-widest uppercase text-[8px] text-white/25">Latency</span>
+                        <span className="font-bold text-accent/70">0.02ms</span>
                     </div>
-                    <div className="flex flex-col gap-2">
-                        <span className="text-[8px] font-black text-white/35 uppercase tracking-widest">Active Listeners</span>
-                        <span className="text-xs font-mono font-bold text-white/85">1,402</span>
+                    <div className="flex items-center gap-1.5 text-[9px] font-mono text-white/40">
+                        <span className="font-black tracking-widest uppercase text-[8px] text-white/25">Listeners</span>
+                        <span className="font-bold text-white/70">1,402</span>
                     </div>
                     <motion.div
                         key={state.wallet.session}
-                        animate={{ scale: [1, 1.1, 1], color: ['rgba(255,255,255,0.85)', 'rgba(251,191,36,1)', 'rgba(255,255,255,0.85)'] }}
-                        className="flex flex-col gap-2"
+                        animate={{ scale: [1, 1.05, 1] }}
+                        className="flex items-center gap-1.5 text-[9px] font-mono"
                     >
-                        <span className="text-[8px] font-black text-amber-400/60 uppercase tracking-widest">Session Revenue</span>
-                        <div className="flex flex-col gap-0.5">
-                            <div className="flex items-baseline gap-1">
-                                <span className="text-xs font-mono font-bold">{state.wallet.session}</span>
-                                <span className="text-[8px] font-black text-amber-400 uppercase tracking-tighter">HP</span>
-                            </div>
-                            <span className="text-[8px] font-mono font-bold text-white/40">
-                                ${(state.wallet.session / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </span>
-                        </div>
+                        <span className="font-black tracking-widest uppercase text-[8px] text-amber-400/50">Revenue</span>
+                        <span className="font-bold text-amber-400/80">{state.wallet.session} HP</span>
                     </motion.div>
                 </div>
 
-                <div className="flex flex-col gap-4 w-64">
-                    <div className="flex justify-between items-baseline">
-                        <span className="text-[8px] font-black text-white/35 uppercase tracking-widest">Master Out L/R</span>
-                        <span className="text-xs font-mono font-bold text-accent">
-                            {(peak * 10 * -1).toFixed(1)} dB
-                        </span>
+                <div className="flex items-center gap-4">
+                    <div className="flex items-baseline gap-1.5">
+                        <span className="text-[8px] font-black text-white/25 uppercase tracking-widest">Master</span>
+                        <span className="text-[10px] font-mono font-bold text-accent">{(peak * 10 * -1).toFixed(1)} dB</span>
                     </div>
-                    <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
+                    <div className="w-20 h-1 bg-white/5 rounded-full overflow-hidden">
                         <motion.div
                             className="h-full bg-accent"
                             animate={{ width: `${peak * 100}%` }}
                             transition={{ duration: 0.05 }}
                         />
                     </div>
+                    <span className="text-[9px] font-mono text-white/30">UK_W2_XTC</span>
+                </div>
+            </div>
+
+            {/* Visualizer Area */}
+            <div className="flex-1 relative p-3 md:p-4 xl:p-6">
+                <div className="absolute inset-0 opacity-[0.02] pointer-events-none"
+                    style={{ backgroundImage: 'radial-gradient(circle, #fff 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
+
+                <div className="relative h-full">
+                    <SpectralVisualizer isPlaying={isPlaying} trackHue={trackHue} />
+                    <InteractionFeed />
+                    <HypeAlert />
+
+                    {/* Track Title + Time Remaining */}
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
+                        <AnimatePresence mode="wait">
+                            <motion.div
+                                key={state.nowPlaying}
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                className="flex flex-col items-center gap-4"
+                            >
+                                <h1 className="text-3xl md:text-5xl xl:text-6xl font-black tracking-tighter text-white uppercase leading-none max-w-2xl px-4 md:px-12 drop-shadow-[0_2px_20px_rgba(0,0,0,0.8)]">
+                                    {state.nowPlaying || "Ingest required"}
+                                </h1>
+                                {isPlaying && remaining > 0 && (
+                                    <span className="text-sm md:text-base font-mono font-bold text-white/30 tabular-nums">
+                                        -{minutes}:{seconds.toString().padStart(2, '0')}
+                                    </span>
+                                )}
+                            </motion.div>
+                        </AnimatePresence>
+                    </div>
+
+                    {/* Countdown Overlay */}
+                    {state.broadcastStatus === 'COUNTDOWN' && (
+                        <GoLiveCountdown onComplete={handleCountdownComplete} />
+                    )}
                 </div>
             </div>
         </main>
@@ -1244,14 +1286,22 @@ function ControlPane() {
                 <div className="space-y-3 xl:mt-6 xl:space-y-4">
                     <h3 className="text-[10px] xl:text-[9px] font-black uppercase tracking-[0.3em] text-white/35">FX Pads</h3>
                     <div className="grid grid-cols-4 xl:grid-cols-2 gap-2">
-                        {['AIRHORN', 'REWIND', 'DROP', 'HYPE'].map(fx => (
-                            <button
-                                key={fx}
-                                onClick={() => handleFXTrigger(fx)}
-                                className="h-12 xl:h-16 bg-white/[0.02] border border-white/5 rounded-sm text-[9px] xl:text-[10px] font-black uppercase tracking-[0.15em] text-white/55 hover:text-accent hover:border-accent/40 hover:bg-accent/5 transition-all active:translate-y-[1px]"
+                        {([
+                            { id: 'AIRHORN', icon: '📯', key: '1' },
+                            { id: 'REWIND', icon: '⏪', key: '2' },
+                            { id: 'DROP', icon: '💥', key: '3' },
+                            { id: 'HYPE', icon: '🔥', key: '4' }
+                        ]).map(fx => (
+                            <motion.button
+                                key={fx.id}
+                                onClick={() => handleFXTrigger(fx.id)}
+                                whileTap={{ scale: 0.95, backgroundColor: 'rgba(255,45,85,0.1)' }}
+                                className="h-14 xl:h-16 bg-white/[0.02] border border-white/5 rounded-sm flex flex-col items-center justify-center gap-1 text-white/55 hover:text-accent hover:border-accent/40 hover:bg-accent/5 transition-all relative overflow-hidden group"
+                                title={`Press ${fx.key} for ${fx.id}`}
                             >
-                                {fx}
-                            </button>
+                                <span className="text-sm xl:text-base group-hover:scale-110 transition-transform">{fx.icon}</span>
+                                <span className="text-[8px] xl:text-[9px] font-black uppercase tracking-[0.1em]">{fx.id}</span>
+                            </motion.button>
                         ))}
                     </div>
                 </div>
@@ -1321,9 +1371,12 @@ function TransportBar() {
     const { initAudio, togglePlay, skipNext, skipPrevious } = useAudioEngine();
     const isPlaying = state.status === 'PLAYING';
     const isLive = state.broadcastStatus === 'LIVE';
+    const currentTrack = state.schedule.current;
+    const trackHue = currentTrack ? getTrackHue(currentTrack.title) : 0;
+    const progress = currentTrack ? (1 - state.schedule.remaining / 180) * 100 : 0;
 
     const handleTransportClick = () => {
-        initAudio(); // Initialize on user gesture to avoid browser blocks
+        initAudio();
         if (state.broadcastStatus === 'STANDBY') {
             dispatch({ type: 'SET_BROADCAST_STATUS', status: 'COUNTDOWN' });
         } else {
@@ -1331,13 +1384,23 @@ function TransportBar() {
         }
     };
 
-    const currentTrack = state.schedule.current;
-
     return (
-        <footer className="border-t border-white/5 bg-[#0a0a0a] flex flex-col">
+        <footer className="border-t border-white/5 bg-[#0a0a0a] flex flex-col relative">
+            {/* Full-width Progress Bar */}
+            <div className="absolute top-0 left-0 right-0 h-[2px] bg-white/5 z-20">
+                <motion.div
+                    className="h-full"
+                    style={{ background: currentTrack ? `hsl(${trackHue}, 60%, 50%)` : 'rgb(255,45,85)' }}
+                    animate={{ width: `${progress}%` }}
+                    transition={{ duration: 0.5, ease: 'linear' }}
+                />
+            </div>
+
             {/* Now Playing Mini-Player — sticky on mobile */}
             {currentTrack && (
-                <div className="flex items-center gap-3 px-4 py-2 md:hidden border-b border-white/5 bg-white/[0.02]">
+                <div className="flex items-center gap-3 px-4 py-2 md:hidden border-b border-white/5 bg-white/[0.02]"
+                    style={{ borderLeftColor: `hsl(${trackHue}, 60%, 50%)`, borderLeftWidth: '3px' }}
+                >
                     <div className="w-8 h-8 rounded-md shrink-0" style={{ background: getTrackGradient(currentTrack.title) }} />
                     <div className="flex flex-col gap-0 flex-1 min-w-0">
                         <span className="text-[11px] font-bold text-white truncate">{currentTrack.title}</span>
@@ -1350,7 +1413,8 @@ function TransportBar() {
                                     key={i}
                                     animate={{ height: ['4px', '12px', '4px'] }}
                                     transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.15 }}
-                                    className="w-[3px] bg-accent rounded-full"
+                                    className="w-[3px] rounded-full"
+                                    style={{ background: `hsl(${trackHue}, 60%, 50%)` }}
                                 />
                             ))}
                         </div>
@@ -1359,36 +1423,40 @@ function TransportBar() {
             )}
 
             {/* Transport Controls */}
-            <div className="h-20 md:h-32 flex items-center px-4 md:px-12 gap-4 md:gap-16">
+            <div className="h-20 md:h-24 flex items-center px-4 md:px-12 gap-4 md:gap-16">
                 {/* Now Playing Info — desktop only */}
-                <div className="hidden md:flex w-80 items-center gap-6">
-                    <div className={cn(
-                        "w-16 h-16 rounded-sm border flex items-center justify-center text-xl font-black transition-all",
-                        isLive ? "border-accent/40 text-accent bg-accent/5" : "border-white/5 text-white/35"
-                    )}>
-                        {state.nowPlaying?.charAt(0) || 'Ø'}
-                    </div>
-                    <div className="min-w-0">
-                        <p className="text-[10px] font-black uppercase tracking-[0.4em] text-white/85 mb-1">XTC Engine v4</p>
-                        <p className="text-sm font-bold text-white truncate uppercase tracking-tight">Main Signal Out</p>
-                    </div>
+                <div className="hidden md:flex w-80 items-center gap-5">
+                    {currentTrack ? (
+                        <>
+                            <div className="w-12 h-12 rounded-md shrink-0 shadow-lg" style={{ background: getTrackGradient(currentTrack.title) }} />
+                            <div className="min-w-0">
+                                <p className="text-[11px] font-bold text-white truncate uppercase tracking-tight">{currentTrack.title}</p>
+                                <p className="text-[10px] font-medium text-white/40 truncate">{currentTrack.artist}</p>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="min-w-0">
+                            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/55 mb-0.5">XTC Engine v4</p>
+                            <p className="text-[11px] font-bold text-white/30 uppercase tracking-tight">Awaiting Signal</p>
+                        </div>
+                    )}
                 </div>
 
                 {/* Playback Controls — always centered */}
-                <div className="flex-1 flex items-center justify-center gap-8 md:gap-16">
+                <div className="flex-1 flex items-center justify-center gap-8 md:gap-12">
                     <button
                         onClick={skipPrevious}
                         className="text-white/55 hover:text-white transition-colors active:scale-90"
                     >
-                        <SkipBack size={24} />
+                        <SkipBack size={22} />
                     </button>
                     <motion.button
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
                         onClick={handleTransportClick}
                         className={cn(
-                            "w-14 h-14 md:w-20 md:h-20 rounded-full border flex items-center justify-center transition-all shadow-2xl relative",
-                            isLive ? "border-accent text-accent bg-accent/10" : "border-white/10 text-white"
+                            "w-14 h-14 md:w-16 md:h-16 rounded-full border-2 flex items-center justify-center transition-all relative",
+                            isLive ? "border-accent text-accent bg-accent/10 shadow-[0_0_30px_rgba(255,45,85,0.3)]" : "border-white/20 text-white hover:border-white/40"
                         )}
                     >
                         {state.broadcastStatus === 'COUNTDOWN' && (
@@ -1400,28 +1468,35 @@ function TransportBar() {
                                 transition={{ repeat: Infinity, duration: 1 }}
                             />
                         )}
-                        {isPlaying ? <Pause size={28} /> : <Play size={28} className="ml-1" />}
+                        {!isPlaying && state.broadcastStatus === 'STANDBY' && (
+                            <motion.div
+                                className="absolute -inset-1 border border-white/10 rounded-full"
+                                animate={{ scale: [1, 1.15, 1], opacity: [0.5, 0, 0.5] }}
+                                transition={{ repeat: Infinity, duration: 2 }}
+                            />
+                        )}
+                        {isPlaying ? <Pause size={24} /> : <Play size={24} className="ml-0.5" />}
                     </motion.button>
                     <button
                         onClick={skipNext}
                         className="text-white/55 hover:text-white transition-colors active:scale-90"
                     >
-                        <SkipForward size={24} />
+                        <SkipForward size={22} />
                     </button>
                 </div>
 
                 {/* Right-side controls — desktop only */}
-                <div className="hidden md:flex w-80 justify-end gap-10 items-center">
-                    <button className="group flex flex-col items-center gap-2">
-                        <Headphones size={20} className="text-white/55 group-hover:text-white transition-colors" />
-                        <span className="text-[8px] font-black uppercase text-white/35 tracking-[0.2em]">Monitoring</span>
+                <div className="hidden md:flex w-80 justify-end gap-8 items-center">
+                    <button className="group flex flex-col items-center gap-1.5">
+                        <Headphones size={18} className="text-white/55 group-hover:text-white transition-colors" />
+                        <span className="text-[8px] font-black uppercase text-white/35 tracking-[0.2em]">Monitor</span>
                     </button>
-                    <button className="group flex flex-col items-center gap-2">
-                        <Sliders size={20} className="text-white/55 group-hover:text-white transition-colors" />
+                    <button className="group flex flex-col items-center gap-1.5">
+                        <Sliders size={18} className="text-white/55 group-hover:text-white transition-colors" />
                         <span className="text-[8px] font-black uppercase text-white/35 tracking-[0.2em]">Setup</span>
                     </button>
-                    <div className="h-10 w-10 rounded-full bg-white/5 flex items-center justify-center text-white/55 hover:text-white transition-all">
-                        <Bell size={18} />
+                    <div className="h-9 w-9 rounded-full bg-white/5 flex items-center justify-center text-white/55 hover:text-white transition-all">
+                        <Bell size={16} />
                     </div>
                 </div>
             </div>
