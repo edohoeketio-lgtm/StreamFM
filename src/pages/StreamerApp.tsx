@@ -9,6 +9,17 @@ import { Header } from '../components/layout/Header';
 import { SpotifyService, hasSpotifyClientId } from '../lib/spotify';
 import { SpotifyPlaylist, Track, LogEntry, LogType, WalletEntry } from '../types/radio';
 
+/* ─── Track Color Generator ─── */
+function getTrackGradient(title: string): string {
+    let hash = 0;
+    for (let i = 0; i < title.length; i++) {
+        hash = title.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const h1 = Math.abs(hash % 360);
+    const h2 = (h1 + 40) % 360;
+    return `linear-gradient(135deg, hsl(${h1}, 70%, 50%), hsl(${h2}, 60%, 40%))`;
+}
+
 /* ═══════════════════════════════════════════════════════════════
    PREMIUM STUDIO COMPONENTS (Architectural Precision)
    ═══════════════════════════════════════════════════════════════ */
@@ -691,9 +702,12 @@ function HypeVault() {
    STUDIO PANES
    ═══════════════════════════════════════════════════════════════ */
 
+type SidebarTab = 'queue' | 'library' | 'playlists';
+
 function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
     const { state, dispatch } = useRadio();
     const { initAudio, togglePlay } = useAudioEngine();
+    const [activeTab, setActiveTab] = useState<SidebarTab>('queue');
 
     const activeTrack = state.schedule.current;
     const playlists = state.playlists || [];
@@ -780,47 +794,65 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
 
     return (
         <aside className="w-full xl:w-80 shrink-0 border-b xl:border-b-0 xl:border-r border-white/5 flex flex-col xl:h-full bg-[#0a0a0a]">
-            {/* Header */}
-            <div className="p-8 border-b border-white/5 bg-white/[0.01]">
-                <h2 className="text-[10px] font-black tracking-[0.4em] uppercase text-accent mb-1 px-1">Source Deck</h2>
-                <div className="flex justify-between items-center mt-4 px-1">
-                    <p className="text-[8px] font-bold text-white/35 uppercase tracking-widest">Library & Playlists</p>
-                    <div className="flex gap-2">
+            {/* Compact Header */}
+            <div className="p-4 md:p-6 border-b border-white/5 bg-white/[0.01]">
+                <div className="flex justify-between items-center">
+                    <h2 className="text-[10px] font-black tracking-[0.4em] uppercase text-accent">Source Deck</h2>
+                    <div className="flex gap-1.5">
                         <button
                             onClick={handleLocalFileIngest}
                             className="text-[8px] font-black uppercase tracking-widest text-white/55 hover:text-accent transition-colors border border-white/10 px-2 py-1 rounded-sm bg-white/5"
                             title="Ingest Individual Files"
                         >
-                            [+ FILE]
+                            + FILE
                         </button>
                         <button
                             onClick={onOpenLinker}
                             className="text-[8px] font-black uppercase tracking-widest text-white/55 hover:text-accent transition-colors border border-white/10 px-2 py-1 rounded-sm bg-white/5"
                             title="Connect Streaming Source"
                         >
-                            [+ LIST]
+                            + LIST
                         </button>
                     </div>
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col pt-6">
-                {/* ON AIR */}
-                <div className="px-6 mb-8">
-                    <h3 className="text-[9px] font-black uppercase tracking-[0.2em] text-white/25 mb-4 px-2">On Air</h3>
-                    <div className="p-4 bg-white/[0.03] border border-white/5 rounded-lg group hover:border-accent/30 transition-all">
+            {/* Mobile Tab Navigation */}
+            <div className="flex xl:hidden border-b border-white/5">
+                {(['queue', 'library', 'playlists'] as SidebarTab[]).map(tab => (
+                    <button
+                        key={tab}
+                        onClick={() => setActiveTab(tab)}
+                        className={cn(
+                            "flex-1 py-3 text-[10px] font-black uppercase tracking-[0.15em] transition-all border-b-2",
+                            activeTab === tab
+                                ? "text-accent border-accent bg-accent/5"
+                                : "text-white/30 border-transparent hover:text-white/50"
+                        )}
+                    >
+                        {tab === 'queue' ? `Queue (${localQueue.length})` : tab === 'library' ? `Library (${library.length})` : `Playlists (${playlists.length})`}
+                    </button>
+                ))}
+            </div>
+
+            <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col pt-4 md:pt-6">
+                {/* ON AIR — always visible */}
+                <div className="px-4 md:px-6 mb-4 md:mb-8">
+                    <h3 className="text-[10px] md:text-[9px] font-black uppercase tracking-[0.2em] text-white/25 mb-3 px-1">On Air</h3>
+                    <div className="p-3 md:p-4 bg-white/[0.03] border border-white/5 rounded-lg group hover:border-accent/30 transition-all">
                         {activeTrack ? (
-                            <div className="space-y-3">
-                                <div className="flex justify-between items-start">
-                                    <div className="flex flex-col gap-0.5 max-w-[180px]">
-                                        <span className="text-[11px] font-bold text-white truncate leading-tight group-hover:text-accent transition-colors">
+                            <div className="space-y-2">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 md:w-9 md:h-9 rounded-md shrink-0" style={{ background: getTrackGradient(activeTrack.title) }} />
+                                    <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                                        <span className="text-[12px] md:text-[11px] font-bold text-white truncate leading-tight group-hover:text-accent transition-colors">
                                             {activeTrack.title}
                                         </span>
-                                        <span className="text-[9px] font-medium text-white/40 truncate">
+                                        <span className="text-[10px] md:text-[9px] font-medium text-white/40 truncate">
                                             {activeTrack.artist}
                                         </span>
                                     </div>
-                                    <div className="text-[9px] font-mono font-bold text-accent px-1.5 py-0.5 bg-accent/10 rounded-sm">
+                                    <div className="text-[9px] font-mono font-bold text-accent px-1.5 py-0.5 bg-accent/10 rounded-sm hidden md:block">
                                         {activeTrack.bpm}
                                     </div>
                                 </div>
@@ -833,20 +865,20 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
                                 </div>
                             </div>
                         ) : (
-                            <span className="text-[10px] text-white/20 italic">No signal detected...</span>
+                            <span className="text-[11px] md:text-[10px] text-white/20 italic">No signal detected...</span>
                         )}
                     </div>
                 </div>
 
-                {/* UP NEXT / DRAGGABLE QUEUE */}
-                <div className="px-6 mb-10">
-                    <h3 className="text-[9px] font-black uppercase tracking-[0.2em] text-white/25 mb-4 px-2">Upcoming Queue</h3>
+                {/* UP NEXT / DRAGGABLE QUEUE — shown on 'queue' tab on mobile, always on desktop */}
+                <div className={cn("px-4 md:px-6 mb-6 md:mb-10", activeTab !== 'queue' && 'hidden xl:block')}>
+                    <h3 className="text-[10px] md:text-[9px] font-black uppercase tracking-[0.2em] text-white/25 mb-3 px-1 hidden xl:block">Upcoming Queue</h3>
 
                     <Reorder.Group
                         axis="y"
                         values={localQueue}
                         onReorder={handleReorder}
-                        className="space-y-2"
+                        className="space-y-1.5"
                     >
                         {localQueue.map((track) => (
                             <Reorder.Item
@@ -855,30 +887,26 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
                                 dragListener={true}
                                 layout
                                 onClick={() => {
-                                    // Remove the track from its current queue position and set as current
                                     const newQueue = localQueue.filter(t => t.instanceId !== track.instanceId);
                                     dispatch({ type: 'REORDER_QUEUE', queue: newQueue });
-
-                                    // Force playback of this specific track
                                     initAudio();
                                     dispatch({ type: 'ADD_LOG', text: `Forcing playback: ${track.title}` });
                                     dispatch({ type: 'FORCE_NEXT', overrideTrack: track });
                                 }}
-                                className="flex items-center gap-4 px-4 py-3 bg-white/[0.02] border border-white/5 hover:border-white/10 hover:bg-white/[0.04] rounded-md group cursor-pointer select-none mb-2 transition-[background-color,border-color] duration-200"
+                                className="flex items-center gap-3 px-3 py-2.5 md:px-4 md:py-3 bg-white/[0.02] border border-white/5 hover:border-white/10 hover:bg-white/[0.04] rounded-md group cursor-pointer select-none transition-[background-color,border-color] duration-200"
                             >
-                                <div className="w-1.5 h-1.5 rounded-full bg-accent/20 group-hover:bg-accent shrink-0" />
+                                <div className="w-6 h-6 md:w-7 md:h-7 rounded-md shrink-0" style={{ background: getTrackGradient(track.title) }} />
                                 <div className="flex flex-col gap-0.5 flex-1 min-w-0 pointer-events-none">
-                                    <span className="text-[10px] font-bold text-white/80 truncate group-hover:text-white transition-colors">{track.title}</span>
-                                    <span className="text-[8px] font-medium text-white/35 truncate uppercase tracking-tighter">{track.artist}</span>
+                                    <span className="text-[11px] md:text-[10px] font-bold text-white/80 truncate group-hover:text-white transition-colors">{track.title}</span>
+                                    <span className="text-[9px] md:text-[8px] font-medium text-white/35 truncate uppercase tracking-tighter">{track.artist}</span>
                                 </div>
-                                <span className="text-[8px] font-mono text-white/20 group-hover:text-accent/80 transition-colors pointer-events-none">{track.bpm}</span>
+                                <span className="text-[8px] font-mono text-white/20 group-hover:text-accent/80 transition-colors pointer-events-none hidden md:inline">{track.bpm}</span>
 
-                                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                                {/* Actions - hidden on mobile, visible on hover on desktop */}
+                                <div className="hidden md:flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
                                     <button
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            // Trigger drag (Handled automatically by framer-motion if dragListener is true on the item, 
-                                            // but we'll add a visual grab handle for clarity)
                                         }}
                                         className="p-2 text-white/20 hover:text-white cursor-grab active:cursor-grabbing transition-colors"
                                         title="Drag to reorder"
@@ -901,20 +929,20 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
                     </Reorder.Group>
 
                     {localQueue.length === 0 && (
-                        <div className="px-4 py-8 border border-dashed border-white/10 rounded-md flex flex-col items-center justify-center gap-2 bg-white/[0.01]">
-                            <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-white/15">Playlist Queue Depleted</span>
+                        <div className="px-4 py-6 border border-dashed border-white/10 rounded-md flex flex-col items-center justify-center gap-2 bg-white/[0.01]">
+                            <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-white/15">Queue empty</span>
                         </div>
                     )}
                 </div>
 
-                {/* TRACKLIST (LIBRARY) */}
-                <div className="px-6 mb-10 overflow-hidden">
-                    <h3 className="text-[9px] font-black uppercase tracking-[0.2em] text-white/25 mb-4 px-2">Project Tracklist</h3>
-                    <div className="space-y-2">
+                {/* TRACKLIST (LIBRARY) — shown on 'library' tab on mobile, always on desktop */}
+                <div className={cn("px-4 md:px-6 mb-6 md:mb-10 overflow-hidden", activeTab !== 'library' && 'hidden xl:block')}>
+                    <h3 className="text-[10px] md:text-[9px] font-black uppercase tracking-[0.2em] text-white/25 mb-3 px-1 hidden xl:block">Project Tracklist</h3>
+                    <div className="space-y-1.5">
                         {library.map((track) => (
                             <div
                                 key={track.id}
-                                className="flex items-center gap-4 px-4 py-3 bg-white/[0.02] border border-white/5 hover:border-white/10 hover:bg-white/[0.04] rounded-md transition-all group cursor-pointer"
+                                className="flex items-center gap-3 px-3 py-2.5 md:px-4 md:py-3 bg-white/[0.02] border border-white/5 hover:border-white/10 hover:bg-white/[0.04] rounded-md transition-all group cursor-pointer"
                                 onClick={() => {
                                     if (state.playlists.length === 0) {
                                         dispatch({ type: 'CREATE_PLAYLIST', name: 'Standard Project', tracks: [track] });
@@ -924,12 +952,13 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
                                     }
                                 }}
                             >
-                                <div className="flex flex-col gap-1 flex-1 min-w-0">
-                                    <span className="text-[10px] font-bold text-white/70 truncate group-hover:text-white transition-colors">{track.title}</span>
-                                    <span className="text-[8px] font-medium text-white/20 uppercase tracking-tighter">{track.artist}</span>
+                                <div className="w-6 h-6 md:w-7 md:h-7 rounded-md shrink-0" style={{ background: getTrackGradient(track.title) }} />
+                                <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                                    <span className="text-[11px] md:text-[10px] font-bold text-white/70 truncate group-hover:text-white transition-colors">{track.title}</span>
+                                    <span className="text-[9px] md:text-[8px] font-medium text-white/20 uppercase tracking-tighter">{track.artist}</span>
                                 </div>
                                 <div className="flex items-center gap-3">
-                                    <span className="text-[8px] font-mono text-white/10">{track.bpm}</span>
+                                    <span className="text-[8px] font-mono text-white/10 hidden md:inline">{track.bpm}</span>
                                     <button
                                         onClick={(e) => {
                                             e.stopPropagation();
@@ -937,7 +966,7 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
                                                 dispatch({ type: 'REMOVE_FROM_LIBRARY', trackId: track.id });
                                             }
                                         }}
-                                        className="opacity-0 group-hover:opacity-100 p-1 text-white/15 hover:text-red-400 transition-colors"
+                                        className="hidden md:block opacity-0 group-hover:opacity-100 p-1 text-white/15 hover:text-red-400 transition-colors"
                                         title="Delete from library"
                                     >
                                         ✕
@@ -948,10 +977,10 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
                     </div>
                 </div>
 
-                {/* PLAYLISTS */}
-                <div className="px-6 mt-auto pb-10 border-t border-white/5 pt-8">
-                    <div className="flex items-center justify-between mb-6 px-2">
-                        <h3 className="text-[9px] font-black uppercase tracking-[0.2em] text-white/25">Playlists</h3>
+                {/* PLAYLISTS — shown on 'playlists' tab on mobile, always on desktop */}
+                <div className={cn("px-4 md:px-6 xl:mt-auto pb-6 md:pb-10 border-t xl:border-t border-white/5 pt-4 md:pt-8", activeTab !== 'playlists' && 'hidden xl:block', activeTab === 'playlists' && 'xl:block border-t-0 xl:border-t')}>
+                    <div className="flex items-center justify-between mb-4 px-1">
+                        <h3 className="text-[10px] md:text-[9px] font-black uppercase tracking-[0.2em] text-white/25 hidden xl:block">Playlists</h3>
                         <button
                             onClick={() => {
                                 const name = prompt('Playlist name:');
@@ -960,16 +989,16 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
                                     dispatch({ type: 'ADD_LOG', text: `Created playlist: ${name.trim()}` });
                                 }
                             }}
-                            className="text-[8px] font-black uppercase tracking-[0.2em] text-accent hover:text-white transition-colors px-2 py-1 rounded border border-accent/20 hover:border-accent/50 bg-accent/5"
+                            className="text-[9px] font-black uppercase tracking-[0.2em] text-accent hover:text-white transition-colors px-2 py-1 rounded border border-accent/20 hover:border-accent/50 bg-accent/5 ml-auto"
                         >
                             + New
                         </button>
                     </div>
 
                     {playlists.length === 0 ? (
-                        <div className="px-4 py-10 border border-dashed border-white/10 rounded-md flex flex-col items-center justify-center gap-3 bg-white/[0.01]">
+                        <div className="px-4 py-8 border border-dashed border-white/10 rounded-md flex flex-col items-center justify-center gap-3 bg-white/[0.01]">
                             <span className="text-[20px]">🎵</span>
-                            <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-white/25 text-center">No playlists yet</span>
+                            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/25 text-center">No playlists yet</span>
                             <button
                                 onClick={() => {
                                     const name = prompt('Name your first playlist:');
@@ -978,19 +1007,19 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
                                         dispatch({ type: 'ADD_LOG', text: `Created playlist: ${name.trim()}` });
                                     }
                                 }}
-                                className="text-[9px] font-black uppercase tracking-[0.15em] text-black bg-accent px-4 py-2 rounded-sm hover:bg-accent/90 transition-colors"
+                                className="text-[10px] font-black uppercase tracking-[0.15em] text-black bg-accent px-4 py-2 rounded-sm hover:bg-accent/90 transition-colors"
                             >
                                 Create Playlist
                             </button>
                             <button
                                 onClick={() => onOpenLinker()}
-                                className="text-[8px] font-bold uppercase tracking-[0.15em] text-accent/60 hover:text-accent transition-colors"
+                                className="text-[9px] font-bold uppercase tracking-[0.15em] text-accent/60 hover:text-accent transition-colors"
                             >
                                 Or import from Spotify
                             </button>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 gap-1.5 pr-2">
+                        <div className="grid grid-cols-1 gap-1.5">
                             {playlists.map(playlist => {
                                 const isActive = playlist.id === state.activePlaylistId;
                                 return (
@@ -1285,67 +1314,98 @@ function TransportBar() {
         }
     };
 
+    const currentTrack = state.schedule.current;
+
     return (
-        <footer className="h-32 border-t border-white/5 bg-[#0a0a0a] flex items-center px-12 gap-16">
-            <div className="w-80 flex items-center gap-6">
-                <div className={cn(
-                    "w-16 h-16 rounded-sm border flex items-center justify-center text-xl font-black transition-all",
-                    isLive ? "border-accent/40 text-accent bg-accent/5" : "border-white/5 text-white/35"
-                )}>
-                    {state.nowPlaying?.charAt(0) || 'Ø'}
-                </div>
-                <div className="min-w-0">
-                    <p className="text-[10px] font-black uppercase tracking-[0.4em] text-white/85 mb-1">XTC Engine v4</p>
-                    <p className="text-sm font-bold text-white truncate uppercase tracking-tight">Main Signal Out</p>
-                </div>
-            </div>
-
-            <div className="flex-1 flex items-center justify-center gap-16">
-                <button
-                    onClick={skipPrevious}
-                    className="text-white/55 hover:text-white transition-colors active:scale-90"
-                >
-                    <SkipBack size={32} />
-                </button>
-                <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={handleTransportClick}
-                    className={cn(
-                        "w-20 h-20 rounded-full border flex items-center justify-center transition-all shadow-2xl relative",
-                        isLive ? "border-accent text-accent bg-accent/10" : "border-white/10 text-white"
+        <footer className="border-t border-white/5 bg-[#0a0a0a] flex flex-col">
+            {/* Now Playing Mini-Player — sticky on mobile */}
+            {currentTrack && (
+                <div className="flex items-center gap-3 px-4 py-2 md:hidden border-b border-white/5 bg-white/[0.02]">
+                    <div className="w-8 h-8 rounded-md shrink-0" style={{ background: getTrackGradient(currentTrack.title) }} />
+                    <div className="flex flex-col gap-0 flex-1 min-w-0">
+                        <span className="text-[11px] font-bold text-white truncate">{currentTrack.title}</span>
+                        <span className="text-[9px] font-medium text-white/40 truncate">{currentTrack.artist}</span>
+                    </div>
+                    {isPlaying && (
+                        <div className="flex items-center gap-0.5">
+                            {[1, 2, 3].map(i => (
+                                <motion.div
+                                    key={i}
+                                    animate={{ height: ['4px', '12px', '4px'] }}
+                                    transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.15 }}
+                                    className="w-[3px] bg-accent rounded-full"
+                                />
+                            ))}
+                        </div>
                     )}
-                >
-                    {state.broadcastStatus === 'COUNTDOWN' && (
-                        <motion.div
-                            layoutId="ring"
-                            className="absolute -inset-2 border-2 border-accent rounded-full"
-                            initial={{ scale: 0.8, opacity: 0 }}
-                            animate={{ scale: 1.2, opacity: [0, 1, 0] }}
-                            transition={{ repeat: Infinity, duration: 1 }}
-                        />
-                    )}
-                    {isPlaying ? <Pause size={36} /> : <Play size={36} className="ml-1.5" />}
-                </motion.button>
-                <button
-                    onClick={skipNext}
-                    className="text-white/55 hover:text-white transition-colors active:scale-90"
-                >
-                    <SkipForward size={32} />
-                </button>
-            </div>
+                </div>
+            )}
 
-            <div className="w-80 flex justify-end gap-10 items-center">
-                <button className="group flex flex-col items-center gap-2">
-                    <Headphones size={20} className="text-white/55 group-hover:text-white transition-colors" />
-                    <span className="text-[8px] font-black uppercase text-white/35 tracking-[0.2em]">Monitoring</span>
-                </button>
-                <button className="group flex flex-col items-center gap-2">
-                    <Sliders size={20} className="text-white/55 group-hover:text-white transition-colors" />
-                    <span className="text-[8px] font-black uppercase text-white/35 tracking-[0.2em]">Setup</span>
-                </button>
-                <div className="h-10 w-10 rounded-full bg-white/5 flex items-center justify-center text-white/55 hover:text-white transition-all">
-                    <Bell size={18} />
+            {/* Transport Controls */}
+            <div className="h-20 md:h-32 flex items-center px-4 md:px-12 gap-4 md:gap-16">
+                {/* Now Playing Info — desktop only */}
+                <div className="hidden md:flex w-80 items-center gap-6">
+                    <div className={cn(
+                        "w-16 h-16 rounded-sm border flex items-center justify-center text-xl font-black transition-all",
+                        isLive ? "border-accent/40 text-accent bg-accent/5" : "border-white/5 text-white/35"
+                    )}>
+                        {state.nowPlaying?.charAt(0) || 'Ø'}
+                    </div>
+                    <div className="min-w-0">
+                        <p className="text-[10px] font-black uppercase tracking-[0.4em] text-white/85 mb-1">XTC Engine v4</p>
+                        <p className="text-sm font-bold text-white truncate uppercase tracking-tight">Main Signal Out</p>
+                    </div>
+                </div>
+
+                {/* Playback Controls — always centered */}
+                <div className="flex-1 flex items-center justify-center gap-8 md:gap-16">
+                    <button
+                        onClick={skipPrevious}
+                        className="text-white/55 hover:text-white transition-colors active:scale-90"
+                    >
+                        <SkipBack size={24} />
+                    </button>
+                    <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={handleTransportClick}
+                        className={cn(
+                            "w-14 h-14 md:w-20 md:h-20 rounded-full border flex items-center justify-center transition-all shadow-2xl relative",
+                            isLive ? "border-accent text-accent bg-accent/10" : "border-white/10 text-white"
+                        )}
+                    >
+                        {state.broadcastStatus === 'COUNTDOWN' && (
+                            <motion.div
+                                layoutId="ring"
+                                className="absolute -inset-2 border-2 border-accent rounded-full"
+                                initial={{ scale: 0.8, opacity: 0 }}
+                                animate={{ scale: 1.2, opacity: [0, 1, 0] }}
+                                transition={{ repeat: Infinity, duration: 1 }}
+                            />
+                        )}
+                        {isPlaying ? <Pause size={28} /> : <Play size={28} className="ml-1" />}
+                    </motion.button>
+                    <button
+                        onClick={skipNext}
+                        className="text-white/55 hover:text-white transition-colors active:scale-90"
+                    >
+                        <SkipForward size={24} />
+                    </button>
+                </div>
+
+                {/* Right-side controls — desktop only */}
+                <div className="hidden md:flex w-80 justify-end gap-10 items-center">
+                    <button className="group flex flex-col items-center gap-2">
+                        <Headphones size={20} className="text-white/55 group-hover:text-white transition-colors" />
+                        <span className="text-[8px] font-black uppercase text-white/35 tracking-[0.2em]">Monitoring</span>
+                    </button>
+                    <button className="group flex flex-col items-center gap-2">
+                        <Sliders size={20} className="text-white/55 group-hover:text-white transition-colors" />
+                        <span className="text-[8px] font-black uppercase text-white/35 tracking-[0.2em]">Setup</span>
+                    </button>
+                    <div className="h-10 w-10 rounded-full bg-white/5 flex items-center justify-center text-white/55 hover:text-white transition-all">
+                        <Bell size={18} />
+                    </div>
                 </div>
             </div>
         </footer>

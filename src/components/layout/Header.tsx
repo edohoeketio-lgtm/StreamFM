@@ -17,36 +17,32 @@ export function Header() {
     };
 
     return (
-        <header className="w-full flex items-center justify-between py-2 px-1">
-            <div className="flex flex-col">
-                <h1 className="text-lg font-semibold tracking-tight text-primary">XTC Radio</h1>
-                <p className="text-[10px] uppercase tracking-wider text-secondary font-medium">Model 01 / Ref 294</p>
+        <header className="w-full flex items-center justify-between py-2 px-3 md:px-4 gap-2">
+            {/* Logo - simplified on mobile */}
+            <div className="flex items-center gap-2 shrink-0">
+                <h1 className="text-base md:text-lg font-semibold tracking-tight text-primary whitespace-nowrap">XTC Radio</h1>
+                <p className="text-[8px] uppercase tracking-wider text-secondary font-medium hidden md:block">Model 01 / Ref 294</p>
             </div>
 
-            <div className="flex items-center gap-3">
-                {/* Wallet Balance */}
+            <div className="flex items-center gap-2 md:gap-3 shrink-0">
+                {/* Wallet Balance - compact on mobile */}
                 <button
                     onClick={() => dispatch({ type: 'TOGGLE_VAULT' })}
-                    className="flex items-center gap-3 px-4 py-2 rounded-full border border-amber-400/20 bg-amber-400/5 hover:bg-amber-400/10 hover:border-amber-400/40 transition-all group shadow-[0_0_15px_rgba(251,191,36,0.05)]"
+                    className="flex items-center gap-1.5 md:gap-3 px-2 md:px-4 py-1.5 md:py-2 rounded-full border border-amber-400/20 bg-amber-400/5 hover:bg-amber-400/10 hover:border-amber-400/40 transition-all group shadow-[0_0_15px_rgba(251,191,36,0.05)]"
                 >
-                    <div className="w-5 h-5 rounded-full bg-amber-400 flex items-center justify-center text-black shadow-[0_0_10px_rgba(251,191,36,0.3)] shrink-0">
-                        <Zap size={12} fill="currentColor" />
+                    <div className="w-4 h-4 md:w-5 md:h-5 rounded-full bg-amber-400 flex items-center justify-center text-black shadow-[0_0_10px_rgba(251,191,36,0.3)] shrink-0">
+                        <Zap size={10} fill="currentColor" />
                     </div>
-                    <div className="flex flex-col items-start leading-none gap-0.5">
-                        <div className="flex items-baseline gap-1.5">
-                            <span className="text-[12px] font-black text-white tracking-widest uppercase">{state.wallet.total}</span>
-                            <span className="text-[8px] font-bold text-amber-400/60 tracking-[0.2em] uppercase">HP</span>
-                        </div>
-                        <span className="text-[9px] font-mono font-bold text-white/40">
-                            ${(state.wallet.total / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
-                        </span>
+                    <div className="flex items-baseline gap-1">
+                        <span className="text-[11px] md:text-[12px] font-black text-white tracking-widest uppercase">{state.wallet.total}</span>
+                        <span className="text-[7px] md:text-[8px] font-bold text-amber-400/60 tracking-[0.2em] uppercase">HP</span>
                     </div>
                 </button>
 
-                {/* Role Toggle */}
+                {/* Role Toggle - hidden on small mobile */}
                 <button
                     onClick={handleRoleToggle}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-card-border hover:border-accent/30 transition-all hardware-button text-[10px] font-bold tracking-widest uppercase"
+                    className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full border border-card-border hover:border-accent/30 transition-all hardware-button text-[10px] font-bold tracking-widest uppercase"
                 >
                     <span className={isStreamer ? 'text-primary' : 'text-secondary/50'}>DJ</span>
                     <div
@@ -60,7 +56,7 @@ export function Header() {
                 </button>
 
                 {/* Status Badge */}
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-card border border-card-border shadow-sm">
+                <div className="flex items-center gap-1.5 md:gap-2 px-2 md:px-3 py-1 md:py-1.5 rounded-full bg-card border border-card-border shadow-sm">
                     <div className="relative flex h-2 w-2">
                         {isPlaying && (
                             <motion.span
@@ -75,8 +71,8 @@ export function Header() {
                                 'bg-gray-300'
                             }`}></span>
                     </div>
-                    <span className={`text-[10px] font-bold tracking-widest ${isPlaying ? 'text-accent' : 'text-gray-400'}`}>
-                        {isPlaying ? (isStreamer ? 'ON AIR' : 'TUNED') : 'STANDBY'}
+                    <span className={`text-[9px] md:text-[10px] font-bold tracking-widest ${isPlaying ? 'text-accent' : 'text-gray-400'}`}>
+                        {isPlaying ? (isStreamer ? 'LIVE' : 'TUNED') : 'STBY'}
                     </span>
                 </div>
             </div>
