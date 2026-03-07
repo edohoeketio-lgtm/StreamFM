@@ -887,7 +887,7 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
                                         </span>
                                     </div>
                                     <div className="text-[9px] font-mono font-bold text-white px-2 py-1 rounded-full hidden md:flex items-center gap-1" style={{ background: `hsla(${getTrackHue(activeTrack.title)}, 60%, 50%, 0.2)` }}>
-                                        {activeTrack.bpm} <span className="text-[7px] text-white/50">BPM</span>
+                                        {state.bpm} <span className="text-[7px] text-white/50">BPM</span>
                                     </div>
                                 </div>
                                 <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
@@ -980,7 +980,7 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
                 </div>
 
                 {/* TRACKLIST (LIBRARY) — shown on 'library' tab on mobile, always on desktop */}
-                <div className={cn("px-4 md:px-6 mb-6 md:mb-10 overflow-hidden", activeTab !== 'library' && 'hidden xl:block')}>
+                <div className={cn("px-4 md:px-6 mb-6 md:mb-10", activeTab !== 'library' && 'hidden xl:block')}>
                     <h3 className="text-[10px] md:text-[9px] font-black uppercase tracking-[0.2em] text-white/25 mb-3 px-1 hidden xl:block">Project Tracklist</h3>
                     <div className="space-y-1.5">
                         {library.map((track) => (

@@ -2,12 +2,7 @@ import { useReducer, useEffect, useRef, useCallback, type ReactNode } from 'reac
 import { RadioContext, AudioRefsContext } from './RadioContexts';
 import { RadioState, RadioAction, Playlist, MusicSource, Track } from '../types/radio';
 
-const FX_ASSETS: Record<string, string> = {
-    AIRHORN: 'https://assets.mixkit.co/sfx/preview/mixkit-stadium-air-horn-loud-and-clear-1123.mp3',
-    REWIND: 'https://assets.mixkit.co/sfx/preview/mixkit-tape-rewind-vibration-2023.mp3',
-    DROP: 'https://assets.mixkit.co/sfx/preview/mixkit-electronic-retro-glitch-drop-2495.mp3',
-    HYPE: 'https://assets.mixkit.co/sfx/preview/mixkit-cinematic-impact-braam-sound-2542.mp3'
-};
+// FX sounds are now synthesized via Web Audio API — no external files needed
 
 const demoTracks: Track[] = [
     {
@@ -386,7 +381,6 @@ export function RadioProvider({ children }: { children: ReactNode }) {
     const analyserRef = useRef<AnalyserNode | null>(null);
     const bassFilterRef = useRef<BiquadFilterNode | null>(null);
     const trebleFilterRef = useRef<BiquadFilterNode | null>(null);
-    const fxRawBuffers = useRef<Record<string, ArrayBuffer>>({});
     const fxContextRef = useRef<AudioContext | null>(null);
     const duckingGainRef = useRef<GainNode | null>(null);
     const micSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
@@ -399,7 +393,7 @@ export function RadioProvider({ children }: { children: ReactNode }) {
     const gainB = useRef<GainNode | null>(null);
 
     const activePlayer = useRef<'A' | 'B'>('A');
-    const lastPlayedStationId = useRef<string | null>(null);
+    const lastPlayedStationId = useRef<string | null>(demoPlaylist.id);
     const stationQueues = useRef<Record<string, Track[]>>({});
     const stateRef = useRef(state);
     const triggerCrossfadeRef = useRef<((stationId?: string) => Promise<void>) | null>(null);
@@ -556,30 +550,116 @@ export function RadioProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'ADD_LOG', text: 'Broadcast Audio Engine Initialized (Dual-Source)' });
     };
 
-    useEffect(() => {
-        const loadFX = async () => {
-            for (const [key, url] of Object.entries(FX_ASSETS)) {
-                try {
-                    const response = await fetch(url);
-                    const arrayBuffer = await response.arrayBuffer();
-                    fxRawBuffers.current[key] = arrayBuffer;
-                } catch (e) {
-                    console.warn(`Failed to load FX: ${key}`, e);
-                }
-            }
-            console.log('Studio FX Assets Pre-loaded (raw buffers)');
-        };
-        loadFX();
-    }, []);
+    // Synthesized FX — no external files needed
+    const synthesizeFX = useCallback((label: string, ctx: AudioContext) => {
+        const now = ctx.currentTime;
+        const masterGain = ctx.createGain();
+        masterGain.gain.value = 0.6;
 
-    const triggerFX = useCallback(async (label: string) => {
-        const rawBuffer = fxRawBuffers.current[label];
-        if (!rawBuffer) {
-            console.warn(`FX buffer not loaded: ${label}`);
-            return;
+        // Route to analyser if available, otherwise direct to speakers
+        const ana = analyserRef.current;
+        if (ana && ctx === audioContextRef.current) {
+            masterGain.connect(ana);
+        } else {
+            masterGain.connect(ctx.destination);
         }
 
-        // Use the main audio context if available, otherwise create a dedicated FX context
+        switch (label) {
+            case 'AIRHORN': {
+                // Stadium air horn — two detuned sawtooth oscillators
+                [440, 466].forEach(freq => {
+                    const osc = ctx.createOscillator();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(freq, now);
+                    const g = ctx.createGain();
+                    g.gain.setValueAtTime(0.5, now);
+                    g.gain.exponentialRampToValueAtTime(0.01, now + 1.2);
+                    osc.connect(g);
+                    g.connect(masterGain);
+                    osc.start(now);
+                    osc.stop(now + 1.2);
+                });
+                break;
+            }
+            case 'REWIND': {
+                // Tape rewind — descending frequency sweep
+                const osc = ctx.createOscillator();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(3000, now);
+                osc.frequency.exponentialRampToValueAtTime(100, now + 0.8);
+                const g = ctx.createGain();
+                g.gain.setValueAtTime(0.4, now);
+                g.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
+                osc.connect(g);
+                g.connect(masterGain);
+                osc.start(now);
+                osc.stop(now + 0.8);
+                break;
+            }
+            case 'DROP': {
+                // Bass drop — sine pitch drop with sub-bass
+                const osc = ctx.createOscillator();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(800, now);
+                osc.frequency.exponentialRampToValueAtTime(40, now + 0.6);
+                const g = ctx.createGain();
+                g.gain.setValueAtTime(0.7, now);
+                g.gain.exponentialRampToValueAtTime(0.01, now + 1.5);
+                // Distortion for punch
+                const distortion = ctx.createWaveShaper();
+                const curve = new Float32Array(256);
+                for (let i = 0; i < 256; ++i) {
+                    const x = (i * 2) / 256 - 1;
+                    curve[i] = (Math.PI + 200) * x / (Math.PI + 200 * Math.abs(x));
+                }
+                distortion.curve = curve;
+                osc.connect(distortion);
+                distortion.connect(g);
+                g.connect(masterGain);
+                osc.start(now);
+                osc.stop(now + 1.5);
+                break;
+            }
+            case 'HYPE': {
+                // Impact braam — low sine burst + noise
+                const osc = ctx.createOscillator();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(60, now);
+                const g = ctx.createGain();
+                g.gain.setValueAtTime(0.8, now);
+                g.gain.exponentialRampToValueAtTime(0.01, now + 1.8);
+                osc.connect(g);
+                g.connect(masterGain);
+                osc.start(now);
+                osc.stop(now + 1.8);
+                // Rising noise
+                const bufferSize = ctx.sampleRate * 0.8;
+                const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+                const data = noiseBuffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+                const noise = ctx.createBufferSource();
+                noise.buffer = noiseBuffer;
+                const noiseGain = ctx.createGain();
+                noiseGain.gain.setValueAtTime(0.01, now);
+                noiseGain.gain.exponentialRampToValueAtTime(0.3, now + 0.3);
+                noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
+                const filter = ctx.createBiquadFilter();
+                filter.type = 'bandpass';
+                filter.frequency.setValueAtTime(200, now);
+                filter.frequency.exponentialRampToValueAtTime(2000, now + 0.5);
+                filter.Q.value = 2;
+                noise.connect(filter);
+                filter.connect(noiseGain);
+                noiseGain.connect(masterGain);
+                noise.start(now);
+                noise.stop(now + 0.8);
+                break;
+            }
+        }
+    }, []);
+
+    const triggerFX = useCallback((label: string) => {
+        // Use main audio context if available, otherwise create/reuse a dedicated one
         let ctx = audioContextRef.current;
         if (!ctx) {
             if (!fxContextRef.current) {
@@ -590,38 +670,10 @@ export function RadioProvider({ children }: { children: ReactNode }) {
             ctx = fxContextRef.current;
         }
 
-        // Resume context if suspended (browser autoplay policy)
-        if (ctx.state === 'suspended') {
-            await ctx.resume();
-        }
-
-        try {
-            // Decode a fresh copy each time (decodeAudioData detaches the buffer)
-            const bufferCopy = rawBuffer.slice(0);
-            const audioBuffer = await ctx.decodeAudioData(bufferCopy);
-
-            const source = ctx.createBufferSource();
-            source.buffer = audioBuffer;
-
-            const gainNode = ctx.createGain();
-            gainNode.gain.value = 0.8;
-
-            source.connect(gainNode);
-
-            // Connect to analyser for visuals if available
-            const ana = analyserRef.current;
-            if (ana && ctx === audioContextRef.current) {
-                gainNode.connect(ana); // This routes through analyser → destination
-            } else {
-                gainNode.connect(ctx.destination); // Direct to speakers
-            }
-
-            source.start(0);
-            console.log(`Triggered SFX: ${label}`);
-        } catch (e) {
-            console.error(`Failed to play FX: ${label}`, e);
-        }
-    }, []);
+        if (ctx.state === 'suspended') ctx.resume();
+        synthesizeFX(label, ctx);
+        console.log(`Triggered SFX: ${label}`);
+    }, [synthesizeFX]);
 
     const toggleMic = async () => {
         if (!audioContextRef.current) initAudio();
@@ -851,13 +903,25 @@ export function RadioProvider({ children }: { children: ReactNode }) {
 
         const player = activePlayer.current === 'A' ? audioA.current : audioB.current;
         const gain = activePlayer.current === 'A' ? gainA.current : gainB.current;
+        const otherPlayer = activePlayer.current === 'A' ? audioB.current : audioA.current;
+        const otherGain = activePlayer.current === 'A' ? gainB.current : gainA.current;
 
         if (state.status === 'PLAYING') {
             if (player) player.pause();
             dispatch({ type: 'SET_STATUS', status: 'PAUSED' });
         } else {
+            // Stop any orphaned audio on the OTHER player to prevent double-play
+            if (otherPlayer && !otherPlayer.paused) {
+                otherPlayer.pause();
+                otherPlayer.currentTime = 0;
+            }
+            if (otherGain && ctx) {
+                otherGain.gain.cancelScheduledValues(ctx.currentTime);
+                otherGain.gain.setValueAtTime(0, ctx.currentTime);
+            }
+
             if (player) {
-                const hasSrc = player && player.src;
+                const hasSrc = player && player.src && player.src !== window.location.href;
 
                 if (!hasSrc) {
                     const s = state.playlists.find((st: Playlist) => st.id === state.activePlaylistId);
@@ -874,7 +938,7 @@ export function RadioProvider({ children }: { children: ReactNode }) {
                 gain?.gain.cancelScheduledValues(ctx!.currentTime);
                 gain?.gain.setValueAtTime(1, ctx!.currentTime);
 
-                if (player && player.src) {
+                if (player && player.src && player.src !== window.location.href) {
                     player.play().then(() => {
                         dispatch({ type: 'SET_STATUS', status: 'PLAYING' });
                     }).catch((e) => {
