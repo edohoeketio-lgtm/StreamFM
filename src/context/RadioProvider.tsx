@@ -386,7 +386,8 @@ export function RadioProvider({ children }: { children: ReactNode }) {
     const analyserRef = useRef<AnalyserNode | null>(null);
     const bassFilterRef = useRef<BiquadFilterNode | null>(null);
     const trebleFilterRef = useRef<BiquadFilterNode | null>(null);
-    const fxBuffers = useRef<Record<string, AudioBuffer>>({});
+    const fxRawBuffers = useRef<Record<string, ArrayBuffer>>({});
+    const fxContextRef = useRef<AudioContext | null>(null);
     const duckingGainRef = useRef<GainNode | null>(null);
     const micSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
     const micGainRef = useRef<GainNode | null>(null);
@@ -557,45 +558,69 @@ export function RadioProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         const loadFX = async () => {
-            // @ts-expect-error webkitAudioContext is a legacy Safari feature
-            const Ctx = window.AudioContext || window.webkitAudioContext;
-            const ctx = new Ctx();
-            const buffers: Record<string, AudioBuffer> = {};
-
             for (const [key, url] of Object.entries(FX_ASSETS)) {
                 try {
                     const response = await fetch(url);
                     const arrayBuffer = await response.arrayBuffer();
-                    const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
-                    buffers[key] = audioBuffer;
+                    fxRawBuffers.current[key] = arrayBuffer;
                 } catch (e) {
                     console.warn(`Failed to load FX: ${key}`, e);
                 }
             }
-            fxBuffers.current = buffers;
-            console.log('Studio FX Assets Pre-loaded');
+            console.log('Studio FX Assets Pre-loaded (raw buffers)');
         };
         loadFX();
     }, []);
 
-    const triggerFX = useCallback((label: string) => {
-        const ctx = audioContextRef.current;
-        const buffer = fxBuffers.current[label];
-        const ana = analyserRef.current;
+    const triggerFX = useCallback(async (label: string) => {
+        const rawBuffer = fxRawBuffers.current[label];
+        if (!rawBuffer) {
+            console.warn(`FX buffer not loaded: ${label}`);
+            return;
+        }
 
-        if (!ctx || !buffer || !ana) return;
+        // Use the main audio context if available, otherwise create a dedicated FX context
+        let ctx = audioContextRef.current;
+        if (!ctx) {
+            if (!fxContextRef.current) {
+                // @ts-expect-error webkitAudioContext
+                const Ctx = window.AudioContext || window.webkitAudioContext;
+                fxContextRef.current = new Ctx();
+            }
+            ctx = fxContextRef.current;
+        }
 
-        const source = ctx.createBufferSource();
-        source.buffer = buffer;
+        // Resume context if suspended (browser autoplay policy)
+        if (ctx.state === 'suspended') {
+            await ctx.resume();
+        }
 
-        const gainNode = ctx.createGain();
-        gainNode.gain.value = 0.8; // SFX slightly lower to not clip
+        try {
+            // Decode a fresh copy each time (decodeAudioData detaches the buffer)
+            const bufferCopy = rawBuffer.slice(0);
+            const audioBuffer = await ctx.decodeAudioData(bufferCopy);
 
-        source.connect(gainNode);
-        gainNode.connect(ana); // Inject directly into analyser for visuals
+            const source = ctx.createBufferSource();
+            source.buffer = audioBuffer;
 
-        source.start(0);
-        console.log(`Triggered SFX: ${label}`);
+            const gainNode = ctx.createGain();
+            gainNode.gain.value = 0.8;
+
+            source.connect(gainNode);
+
+            // Connect to analyser for visuals if available
+            const ana = analyserRef.current;
+            if (ana && ctx === audioContextRef.current) {
+                gainNode.connect(ana); // This routes through analyser → destination
+            } else {
+                gainNode.connect(ctx.destination); // Direct to speakers
+            }
+
+            source.start(0);
+            console.log(`Triggered SFX: ${label}`);
+        } catch (e) {
+            console.error(`Failed to play FX: ${label}`, e);
+        }
     }, []);
 
     const toggleMic = async () => {
