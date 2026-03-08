@@ -735,6 +735,7 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
     const { state, dispatch } = useRadio();
     const { initAudio, togglePlay } = useAudioEngine();
     const [activeTab, setActiveTab] = useState<SidebarTab>('queue');
+    const [expandedPlaylist, setExpandedPlaylist] = useState<string | null>(null);
 
     const activeTrack = state.schedule.current;
     const playlists = state.playlists || [];
@@ -1185,36 +1186,141 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
                             </button>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 gap-1.5">
+                        <div className="space-y-1.5">
                             {playlists.map(playlist => {
                                 const isActive = playlist.id === state.activePlaylistId;
+                                const isExpanded = expandedPlaylist === playlist.id;
+                                const undownloaded = playlist.tracks.filter(t => !downloadedIds.has(t.id)).length;
+
                                 return (
-                                    <button
-                                        key={playlist.id}
-                                        onClick={() => {
-                                            initAudio();
-                                            dispatch({ type: 'SWITCH_PLAYLIST', playlistId: playlist.id });
-                                            if (state.status !== 'PLAYING') setTimeout(() => togglePlay(), 50);
-                                        }}
-                                        className={cn(
-                                            "w-full text-left py-3 px-4 rounded-md transition-all group border flex items-center justify-between",
-                                            isActive
-                                                ? "bg-accent/5 border-accent/20"
-                                                : "bg-transparent border-transparent hover:bg-white/[0.02]"
+                                    <div key={playlist.id} className="rounded-md border border-white/5 overflow-hidden">
+                                        {/* Playlist header */}
+                                        <div className="flex items-center">
+                                            <button
+                                                onClick={() => setExpandedPlaylist(isExpanded ? null : playlist.id)}
+                                                className={cn(
+                                                    "flex-1 text-left py-3 px-4 transition-all group flex items-center justify-between",
+                                                    isActive ? "bg-accent/5" : "bg-transparent hover:bg-white/[0.02]"
+                                                )}
+                                            >
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <ChevronRight size={10} className={cn(
+                                                        "text-white/20 transition-transform shrink-0",
+                                                        isExpanded && "rotate-90"
+                                                    )} />
+                                                    <span className={cn(
+                                                        "text-[10px] font-bold tracking-tight truncate",
+                                                        isActive ? "text-accent" : "text-white/40 group-hover:text-white/70"
+                                                    )}>
+                                                        {playlist.name}
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    {isActive && <div className="w-1 h-1 rounded-full bg-accent animate-pulse" />}
+                                                    <span className="text-[8px] font-mono text-white/10 uppercase">{playlist.tracks.length} TRKS</span>
+                                                </div>
+                                            </button>
+                                            {/* Play button */}
+                                            <button
+                                                onClick={() => {
+                                                    initAudio();
+                                                    dispatch({ type: 'SWITCH_PLAYLIST', playlistId: playlist.id });
+                                                    if (state.status !== 'PLAYING') setTimeout(() => togglePlay(), 50);
+                                                }}
+                                                className={cn(
+                                                    "px-3 py-3 transition-colors border-l border-white/5",
+                                                    isActive ? "text-accent" : "text-white/20 hover:text-accent"
+                                                )}
+                                                title="Play this playlist"
+                                            >
+                                                <Play size={10} />
+                                            </button>
+                                        </div>
+
+                                        {/* Expanded track list */}
+                                        {isExpanded && (
+                                            <div className="border-t border-white/5 bg-white/[0.01]">
+                                                {/* Download All for this playlist */}
+                                                {undownloaded > 0 && (
+                                                    <div className="px-3 py-2 flex items-center justify-between border-b border-white/5">
+                                                        <span className="text-[8px] text-white/20 uppercase tracking-wider">{undownloaded} not downloaded</span>
+                                                        <button
+                                                            onClick={() => {
+                                                                const tracksToDownload = playlist.tracks.filter(t => !downloadedIds.has(t.id));
+                                                                tracksToDownload.forEach(track => handleDownloadTrack(track));
+                                                            }}
+                                                            className="text-[8px] font-black uppercase tracking-widest text-emerald-400/70 hover:text-emerald-400 transition-colors flex items-center gap-1"
+                                                        >
+                                                            <CloudDownload size={9} /> DL All
+                                                        </button>
+                                                    </div>
+                                                )}
+
+                                                {/* Track rows */}
+                                                <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
+                                                    {playlist.tracks.map((track) => {
+                                                        const isDownloaded = downloadedIds.has(track.id);
+                                                        const progress = downloadProgress[track.id];
+                                                        const isDownloading = progress && (progress.status === 'searching' || progress.status === 'downloading');
+
+                                                        return (
+                                                            <div
+                                                                key={track.instanceId || track.id}
+                                                                className={cn(
+                                                                    "flex items-center gap-2 px-3 py-2 transition-all group hover:bg-white/[0.03]",
+                                                                    isDownloaded && "bg-emerald-500/[0.02]"
+                                                                )}
+                                                            >
+                                                                {/* Color tile with download badge */}
+                                                                <div className="relative w-5 h-5 rounded shrink-0" style={{ background: getTrackGradient(track.title) }}>
+                                                                    {isDownloaded && (
+                                                                        <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full flex items-center justify-center">
+                                                                            <Check size={6} className="text-black" />
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+
+                                                                {/* Track info */}
+                                                                <div className="flex flex-col flex-1 min-w-0">
+                                                                    <span className={cn(
+                                                                        "text-[10px] font-bold truncate",
+                                                                        isDownloaded ? "text-white/70" : "text-white/40"
+                                                                    )}>{track.title}</span>
+                                                                    <span className="text-[8px] text-white/15 uppercase tracking-tighter truncate">{track.artist}</span>
+                                                                    {isDownloading && (
+                                                                        <div className="w-full h-0.5 rounded-full bg-white/5 mt-0.5">
+                                                                            <div className="h-full rounded-full bg-emerald-500 transition-all duration-300" style={{ width: `${progress.progress}%` }} />
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+
+                                                                {/* Download action */}
+                                                                {isDownloading ? (
+                                                                    <Loader size={10} className="text-emerald-400 shrink-0" />
+                                                                ) : isDownloaded ? (
+                                                                    <button
+                                                                        onClick={() => handleDeleteDownload(track.id)}
+                                                                        className="p-1 opacity-0 group-hover:opacity-100 text-white/15 hover:text-red-400 transition-all shrink-0"
+                                                                        title="Delete download"
+                                                                    >
+                                                                        <Trash2 size={10} />
+                                                                    </button>
+                                                                ) : (
+                                                                    <button
+                                                                        onClick={() => handleDownloadTrack(track)}
+                                                                        className="p-1 text-white/15 hover:text-emerald-400 transition-colors shrink-0"
+                                                                        title="Download track"
+                                                                    >
+                                                                        <Download size={10} />
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
                                         )}
-                                    >
-                                        <span className={cn(
-                                            "text-[10px] font-bold tracking-tight truncate",
-                                            isActive ? "text-accent" : "text-white/40 group-hover:text-white/70"
-                                        )}>
-                                            {playlist.name}
-                                        </span>
-                                        {isActive ? (
-                                            <div className="w-1 h-1 rounded-full bg-accent animate-pulse" />
-                                        ) : (
-                                            <span className="text-[8px] font-mono text-white/10 group-hover:text-white/20 uppercase">{playlist.tracks.length} TRKS</span>
-                                        )}
-                                    </button>
+                                    </div>
                                 );
                             })}
                         </div>
