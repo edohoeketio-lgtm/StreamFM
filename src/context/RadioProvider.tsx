@@ -419,7 +419,7 @@ export function RadioProvider({ children }: { children: ReactNode }) {
             if (!tracks || tracks.length === 0) return undefined;
             const shuffled = shuffleArray(tracks);
             // If the first song in new deck is the same as the last played song, swap it
-            if (currentUrl && currentUrl.includes(shuffled[0].url) && shuffled.length > 1) {
+            if (currentUrl && shuffled[0].url && currentUrl.includes(shuffled[0].url) && shuffled.length > 1) {
                 [shuffled[0], shuffled[1]] = [shuffled[1], shuffled[0]];
             }
             stationQueues.current[stationId] = shuffled;
@@ -432,7 +432,7 @@ export function RadioProvider({ children }: { children: ReactNode }) {
 
         // Always check: if the next track is the currently playing song, skip it
         if (currentUrl && queue.length > 1) {
-            const nextIndex = queue.findIndex((track: Track) => !currentUrl.includes(track.url));
+            const nextIndex = queue.findIndex((track: Track) => !track.url || !currentUrl.includes(track.url));
             if (nextIndex > 0) {
                 const [track] = queue.splice(nextIndex, 1);
                 queue.unshift(track);
