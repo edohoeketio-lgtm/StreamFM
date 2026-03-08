@@ -745,9 +745,15 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
     const [downloadedIds, setDownloadedIds] = useState<Set<string>>(new Set());
     const [downloadProgress, setDownloadProgress] = useState<Record<string, DownloadProgress>>({});
 
-    // Load downloaded track IDs on mount
+    // Clean corrupted entries and load downloaded track IDs on mount
     useEffect(() => {
-        DownloadService.getDownloadedIds().then(setDownloadedIds);
+        const init = async () => {
+            const { AudioStore } = await import('../lib/audioStore');
+            await AudioStore.validateAndClean();
+            const ids = await DownloadService.getDownloadedIds();
+            setDownloadedIds(ids);
+        };
+        init();
     }, []);
 
     const handleDownloadTrack = useCallback(async (track: Track) => {

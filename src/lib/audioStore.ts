@@ -86,12 +86,54 @@ export const AudioStore = {
 
     /**
      * Create a playable blob URL for a stored track.
-     * Caller must revoke with URL.revokeObjectURL() when done.
+     * Validates the blob before returning — auto-deletes corrupted entries.
      */
     createPlayableURL: async (trackId: string): Promise<string | null> => {
         const entry = await AudioStore.get(trackId);
         if (!entry) return null;
+
+        // Validate: real MP3s are at least 100KB
+        if (entry.blob.size < 100 * 1024) {
+            console.warn(`[AudioStore] Corrupted entry "${entry.title}" (${entry.blob.size} bytes) — removing`);
+            await AudioStore.delete(trackId);
+            return null;
+        }
+
         return URL.createObjectURL(entry.blob);
+    },
+
+    /**
+     * Validate all stored entries and remove corrupted ones.
+     * Call this on app startup.
+     */
+    validateAndClean: async (): Promise<number> => {
+        try {
+            const db = await openDB();
+            const entries = await new Promise<StoredTrack[]>((resolve, reject) => {
+                const tx = db.transaction(STORE_NAME, 'readonly');
+                const store = tx.objectStore(STORE_NAME);
+                const request = store.getAll();
+                request.onsuccess = () => resolve(request.result as StoredTrack[]);
+                request.onerror = () => reject(request.error);
+            });
+
+            let removed = 0;
+            for (const entry of entries) {
+                // Remove entries under 100KB (not real audio)
+                if (entry.blob.size < 100 * 1024) {
+                    console.warn(`[AudioStore] Purging corrupted: "${entry.title}" (${entry.blob.size} bytes)`);
+                    await AudioStore.delete(entry.id);
+                    removed++;
+                }
+            }
+
+            if (removed > 0) {
+                console.log(`[AudioStore] Cleaned up ${removed} corrupted entries`);
+            }
+            return removed;
+        } catch {
+            return 0;
+        }
     },
 
     /**
