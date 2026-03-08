@@ -310,10 +310,9 @@ function SourceLinkerModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
                 url: t.url
             }));
 
-            console.log('[Spotify Debug] Dispatching tracks to library/playlist:', tracks.length);
+            console.log('[Spotify Debug] Dispatching tracks to playlist:', tracks.length);
             dispatch({ type: 'CREATE_PLAYLIST', name: playlist.name, tracks });
-            dispatch({ type: 'ADD_TO_LIBRARY', tracks });
-            dispatch({ type: 'ADD_LOG', text: `✅ Imported "${playlist.name}" — ${tracks.length} tracks added to library` });
+            dispatch({ type: 'ADD_LOG', text: `✅ Imported "${playlist.name}" — ${tracks.length} tracks` });
 
             setImportingId(null);
             onClose();
