@@ -1,5 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
+const YT_API_KEY = 'AIzaSyBzcFx8JnRDdN5w3oNKJTQmZDSUAwD-gL4';
+
 const PIPED_INSTANCES = [
     'https://pipedapi.kavin.rocks',
     'https://pipedapi.tokyo.io',
@@ -18,6 +20,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ error: 'Missing title or artist' });
     }
 
+    // Strategy 1: Official YouTube Data API (most reliable)
+    try {
+        const query = encodeURIComponent(`${title} ${artist} audio`);
+        const ytUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${query}&type=video&videoCategoryId=10&maxResults=3&key=${YT_API_KEY}`;
+
+        const ytRes = await fetch(ytUrl);
+        if (ytRes.ok) {
+            const data = await ytRes.json();
+            const items = data.items || [];
+            if (items.length > 0) {
+                return res.status(200).json({
+                    videoId: items[0].id.videoId,
+                    source: 'youtube-api',
+                });
+            }
+        }
+    } catch {
+        console.warn('[Search] YouTube API failed, falling back to Piped');
+    }
+
+    // Strategy 2: Piped instances (fallback)
     const query = encodeURIComponent(`${title} ${artist} topic`);
 
     for (const instance of PIPED_INSTANCES) {
