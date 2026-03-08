@@ -1,17 +1,15 @@
 /**
  * DownloadService — Orchestrates track downloading.
  * 
- * Flow: YouTube Search → Cobalt Audio Extraction → IndexedDB Storage
+ * Flow: YouTube Search (existing service) → Cobalt Audio Extraction → IndexedDB Storage
  */
 
 import { AudioStore } from './audioStore';
+import { YoutubeService } from './youtube';
 import { Track } from '../types/radio';
 
 // Cobalt instance URL — your Railway deployment
 const COBALT_API_URL = 'https://cobalt-production-43b9.up.railway.app';
-
-// YouTube Data API Key
-const YT_API_KEY = 'AIzaSyBzcFx8JnRDdN5w3oNKJTQmZDSUAw0gL4';
 
 export type DownloadStatus = 'idle' | 'searching' | 'downloading' | 'done' | 'error';
 
@@ -25,155 +23,92 @@ export interface DownloadProgress {
 type ProgressCallback = (progress: DownloadProgress) => void;
 
 /**
- * Search YouTube for the best matching video using official Data API.
- */
-async function searchYouTube(title: string, artist: string, durationSec: number): Promise<string | null> {
-    const query = `${title} ${artist} audio`;
-    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&videoCategoryId=10&maxResults=5&key=${YT_API_KEY}`;
-
-    try {
-        const response = await fetch(url);
-        if (!response.ok) {
-            console.error('[YT Search] API error:', response.status);
-            return null;
-        }
-
-        const data = await response.json();
-        const items = data.items || [];
-
-        if (items.length === 0) return null;
-
-        // If we have duration info, verify the top results
-        if (durationSec > 0 && items.length > 1) {
-            const videoIds = items.map((item: { id: { videoId: string } }) => item.id.videoId).join(',');
-            const detailsUrl = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails&id=${videoIds}&key=${YT_API_KEY}`;
-
-            try {
-                const detailsRes = await fetch(detailsUrl);
-                const detailsData = await detailsRes.json();
-                const videos = detailsData.items || [];
-
-                // Find the video closest in duration
-                let bestMatch = items[0].id.videoId;
-                let bestDiff = Infinity;
-
-                for (const video of videos) {
-                    const iso = video.contentDetails.duration; // e.g. "PT3M45S"
-                    const ytDuration = parseISO8601Duration(iso);
-                    const diff = Math.abs(ytDuration - durationSec);
-
-                    if (diff < bestDiff) {
-                        bestDiff = diff;
-                        bestMatch = video.id;
-                    }
-                }
-
-                // Only use duration match if it's within 30 seconds
-                if (bestDiff <= 30) {
-                    return bestMatch;
-                }
-            } catch {
-                // Fall through to first result
-            }
-        }
-
-        return items[0].id.videoId;
-    } catch (err) {
-        console.error('[YT Search] Failed:', err);
-        return null;
-    }
-}
-
-/**
- * Parse ISO 8601 duration (e.g., "PT3M45S") to seconds.
- */
-function parseISO8601Duration(iso: string): number {
-    const match = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
-    if (!match) return 0;
-    const hours = parseInt(match[1] || '0');
-    const minutes = parseInt(match[2] || '0');
-    const seconds = parseInt(match[3] || '0');
-    return hours * 3600 + minutes * 60 + seconds;
-}
-
-/**
  * Download audio via Cobalt API.
+ * Routes through /api/cobalt proxy on Vercel to avoid CORS,
+ * falls back to direct call for local dev / if proxy unavailable.
  */
 async function downloadViaCobalt(videoId: string, onProgress?: (pct: number) => void): Promise<Blob | null> {
     const cobaltUrl = localStorage.getItem('streamfm_cobalt_url') || COBALT_API_URL;
-
-    if (!cobaltUrl) {
-        throw new Error('Cobalt URL not configured. Go to Settings → Set Cobalt URL.');
-    }
-
     const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
-    try {
-        const response = await fetch(`${cobaltUrl}/`, {
-            method: 'POST',
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                url: youtubeUrl,
-                downloadMode: 'audio',
-                audioFormat: 'mp3',
-            }),
-        });
+    // Try the proxy first, then direct
+    const endpoints = [
+        '/api/cobalt',    // Vercel proxy (avoids CORS)
+        `${cobaltUrl}/`,  // Direct (may work if Cobalt has CORS headers)
+    ];
 
-        if (!response.ok) {
-            const errText = await response.text();
-            throw new Error(`Cobalt error (${response.status}): ${errText}`);
-        }
+    for (const endpoint of endpoints) {
+        try {
+            console.log(`[Cobalt] Trying endpoint: ${endpoint}`);
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    url: youtubeUrl,
+                    downloadMode: 'audio',
+                    audioFormat: 'mp3',
+                }),
+            });
 
-        const data = await response.json();
-
-        // Cobalt returns a download URL
-        if (data.url) {
-            const audioResponse = await fetch(data.url);
-            if (!audioResponse.ok) throw new Error('Failed to download audio file');
-
-            const contentLength = audioResponse.headers.get('content-length');
-            const total = contentLength ? parseInt(contentLength) : 0;
-
-            // Stream with progress tracking
-            if (total > 0 && audioResponse.body) {
-                const reader = audioResponse.body.getReader();
-                const chunks: Uint8Array[] = [];
-                let received = 0;
-
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    chunks.push(value);
-                    received += value.length;
-                    onProgress?.(Math.round((received / total) * 100));
-                }
-
-                const blob = new Blob(chunks as BlobPart[], { type: 'audio/mpeg' });
-                return blob;
-            } else {
-                // No content-length, can't track progress
-                onProgress?.(50);
-                const blob = await audioResponse.blob();
-                onProgress?.(100);
-                return blob;
+            if (!response.ok) {
+                const errText = await response.text();
+                console.warn(`[Cobalt] ${endpoint} returned ${response.status}: ${errText}`);
+                continue; // Try next endpoint
             }
-        }
 
-        // Some Cobalt versions return the audio directly in the response
-        if (data.status === 'stream' || data.status === 'redirect') {
-            const streamUrl = data.url || data.stream;
-            const audioResponse = await fetch(streamUrl);
-            return await audioResponse.blob();
-        }
+            const data = await response.json();
 
-        throw new Error('Unexpected Cobalt response format');
-    } catch (err) {
-        console.error('[Cobalt] Download failed:', err);
-        throw err;
+            // Cobalt returns a download URL
+            if (data.url) {
+                console.log(`[Cobalt] Got download URL from ${endpoint}`);
+                const audioResponse = await fetch(data.url);
+                if (!audioResponse.ok) throw new Error('Failed to download audio file');
+
+                const contentLength = audioResponse.headers.get('content-length');
+                const total = contentLength ? parseInt(contentLength) : 0;
+
+                // Stream with progress tracking
+                if (total > 0 && audioResponse.body) {
+                    const reader = audioResponse.body.getReader();
+                    const chunks: Uint8Array[] = [];
+                    let received = 0;
+
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        chunks.push(value);
+                        received += value.length;
+                        onProgress?.(Math.round((received / total) * 100));
+                    }
+
+                    return new Blob(chunks as BlobPart[], { type: 'audio/mpeg' });
+                } else {
+                    onProgress?.(50);
+                    const blob = await audioResponse.blob();
+                    onProgress?.(100);
+                    return blob;
+                }
+            }
+
+            // Some Cobalt versions return stream/redirect
+            if (data.status === 'stream' || data.status === 'redirect') {
+                const streamUrl = data.url || data.stream;
+                const audioResponse = await fetch(streamUrl);
+                return await audioResponse.blob();
+            }
+
+            console.warn(`[Cobalt] Unexpected response from ${endpoint}:`, data);
+            continue;
+        } catch (err) {
+            console.warn(`[Cobalt] ${endpoint} failed:`, err);
+            continue;
+        }
     }
+
+    throw new Error('All Cobalt endpoints failed. Check your Cobalt deployment.');
 }
 
 export const DownloadService = {
@@ -195,9 +130,9 @@ export const DownloadService = {
                 return true;
             }
 
-            // Step 1: Search YouTube
+            // Step 1: Search YouTube using existing service
             notify('searching', 10);
-            const videoId = await searchYouTube(track.title, track.artist, track.duration || 0);
+            const videoId = await YoutubeService.searchTrack(track.title, track.artist);
 
             if (!videoId) {
                 notify('error', 0, `No YouTube match found for "${track.title}"`);
@@ -246,8 +181,6 @@ export const DownloadService = {
             const result = await DownloadService.downloadTrack(track, onProgress);
             if (result) success++;
             else failed++;
-
-            // Small delay between downloads to be polite
             await new Promise(r => setTimeout(r, 500));
         }
 
@@ -256,7 +189,6 @@ export const DownloadService = {
 
     /**
      * Get the playable URL for a downloaded track.
-     * Returns the blob URL or null if not downloaded.
      */
     getPlayableURL: async (trackId: string): Promise<string | null> => {
         return AudioStore.createPlayableURL(trackId);
@@ -274,7 +206,6 @@ export const DownloadService = {
      * Set the Cobalt instance URL.
      */
     setCobaltUrl: (url: string) => {
-        // Normalize: remove trailing slash
         const normalized = url.replace(/\/+$/, '');
         localStorage.setItem('streamfm_cobalt_url', normalized);
     },
