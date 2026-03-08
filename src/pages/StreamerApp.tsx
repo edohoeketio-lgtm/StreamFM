@@ -3,10 +3,11 @@ import { useRadio, useAudioEngine } from '../hooks/useRadio';
 import { useAudioReal } from '../hooks/useAudioReal';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Play, Pause, SkipForward, SkipBack, Sliders, Bell, Headphones, Zap, Search, ChevronRight } from '../components/ui/Icons';
+import { Play, Pause, SkipForward, SkipBack, Sliders, Bell, Headphones, Zap, Search, ChevronRight, Download, Check, Loader, Trash2, CloudDownload } from '../components/ui/Icons';
 import { cn } from '../lib/utils';
 import { Header } from '../components/layout/Header';
 import { SpotifyService, hasSpotifyClientId } from '../lib/spotify';
+import { DownloadService, DownloadProgress } from '../lib/downloadService';
 import { SpotifyPlaylist, Track, LogEntry, LogType, WalletEntry } from '../types/radio';
 
 /* ─── Track Color Generator ─── */
@@ -740,17 +741,70 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
     const playlists = state.playlists || [];
     const library = state.library || [];
 
+    // Download state
+    const [downloadedIds, setDownloadedIds] = useState<Set<string>>(new Set());
+    const [downloadProgress, setDownloadProgress] = useState<Record<string, DownloadProgress>>({});
+
+    // Load downloaded track IDs on mount
+    useEffect(() => {
+        DownloadService.getDownloadedIds().then(setDownloadedIds);
+    }, []);
+
+    const handleDownloadTrack = useCallback(async (track: Track) => {
+        if (!DownloadService.getCobaltUrl()) {
+            const url = prompt('Enter your Cobalt instance URL (e.g., https://cobalt.example.com):');
+            if (!url) return;
+            DownloadService.setCobaltUrl(url);
+        }
+
+        setDownloadProgress(prev => ({ ...prev, [track.id]: { trackId: track.id, status: 'searching', progress: 0 } }));
+
+        const success = await DownloadService.downloadTrack(track, (progress) => {
+            setDownloadProgress(prev => ({ ...prev, [track.id]: progress }));
+        });
+
+        if (success) {
+            setDownloadedIds(prev => new Set([...prev, track.id]));
+        }
+    }, []);
+
+    const handleDownloadAll = useCallback(async () => {
+        if (!DownloadService.getCobaltUrl()) {
+            const url = prompt('Enter your Cobalt instance URL (e.g., https://cobalt.example.com):');
+            if (!url) return;
+            DownloadService.setCobaltUrl(url);
+        }
+
+        const undownloaded = library.filter(t => !downloadedIds.has(t.id));
+        for (const track of undownloaded) {
+            await handleDownloadTrack(track);
+        }
+    }, [library, downloadedIds, handleDownloadTrack]);
+
+    const handleDeleteDownload = useCallback(async (trackId: string) => {
+        const { AudioStore } = await import('../lib/audioStore');
+        await AudioStore.delete(trackId);
+        setDownloadedIds(prev => {
+            const next = new Set(prev);
+            next.delete(trackId);
+            return next;
+        });
+        setDownloadProgress(prev => {
+            const next = { ...prev };
+            delete next[trackId];
+            return next;
+        });
+    }, []);
     // Local state for seamless drag-and-drop
     const [localQueue, setLocalQueue] = useState<Track[]>(state.schedule.queue || []);
 
-    // Sync local queue when global state changes (e.g. track added from library)
+    // Sync local queue when global state changes
     useEffect(() => {
         setLocalQueue(state.schedule.queue);
     }, [state.schedule.queue]);
 
     const handleReorder = (newQueue: Track[]) => {
         setLocalQueue(newQueue);
-        // Dispatch to global state for persistence
         dispatch({ type: 'REORDER_QUEUE', queue: newQueue });
     };
 
@@ -759,7 +813,6 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
             // @ts-expect-error File System Access API
             const dirHandle = await window.showDirectoryPicker();
             const tracks: Track[] = [];
-
             for await (const entry of dirHandle.values()) {
                 if (entry.kind === 'file' && (entry.name.endsWith('.mp3') || entry.name.endsWith('.wav'))) {
                     tracks.push({
@@ -771,7 +824,6 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
                     });
                 }
             }
-
             if (tracks.length > 0) {
                 dispatch({ type: 'ADD_TO_LIBRARY', tracks });
                 dispatch({ type: 'ADD_LOG', text: `Ingested ${tracks.length} local files from folder.` });
@@ -782,9 +834,7 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
     }, [dispatch]);
 
     useEffect(() => {
-        const handler = () => {
-            handleLocalFolderIngest();
-        };
+        const handler = () => handleLocalFolderIngest();
         window.addEventListener('trigger-folder-ingest', handler);
         return () => window.removeEventListener('trigger-folder-ingest', handler);
     }, [handleLocalFolderIngest]);
@@ -794,10 +844,7 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
             // @ts-expect-error File System Access API
             const fileHandles = await window.showOpenFilePicker({
                 multiple: true,
-                types: [{
-                    description: 'Audio Files',
-                    accept: { 'audio/*': ['.mp3', '.wav'] }
-                }]
+                types: [{ description: 'Audio Files', accept: { 'audio/*': ['.mp3', '.wav'] } }]
             });
             const tracks: Track[] = [];
             for (const handle of fileHandles) {
@@ -819,12 +866,15 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
         }
     }, [dispatch]);
 
+    const spotifyToken = localStorage.getItem('spotify_access_token');
+
     return (
-        <aside className="w-full xl:w-80 shrink-0 border-b xl:border-b-0 xl:border-r border-white/5 flex flex-col xl:h-full bg-[#0a0a0a]">
-            {/* Compact Header */}
-            <div className="p-4 md:p-6 border-b border-white/5 bg-white/[0.01]">
-                <div className="flex justify-between items-center">
-                    <h2 className="text-[10px] font-black tracking-[0.4em] uppercase text-accent">Source Deck</h2>
+        <aside className="w-full xl:w-80 bg-[#0a0a0a] border-r border-white/5 flex flex-col overflow-hidden">
+
+            {/* Header */}
+            <div className="px-4 md:px-6 pt-4 md:pt-8 pb-3 md:pb-5 border-b border-white/5">
+                <div className="flex items-center justify-between mb-2 md:mb-4">
+                    <h2 className="text-[9px] font-black uppercase tracking-[0.4em] text-white/25 hidden xl:block">Source Deck</h2>
                     <div className="flex gap-1.5">
                         <button
                             onClick={handleLocalFileIngest}
@@ -844,17 +894,15 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
                 </div>
             </div>
 
-            {/* Mobile Tab Navigation */}
+            {/* Mobile Tab Selector */}
             <div className="flex xl:hidden border-b border-white/5">
                 {(['queue', 'library', 'playlists'] as SidebarTab[]).map(tab => (
                     <button
                         key={tab}
                         onClick={() => setActiveTab(tab)}
                         className={cn(
-                            "flex-1 py-3 text-[10px] font-black uppercase tracking-[0.15em] transition-all border-b-2",
-                            activeTab === tab
-                                ? "text-accent border-accent bg-accent/5"
-                                : "text-white/30 border-transparent hover:text-white/50"
+                            "flex-1 py-2 text-[9px] font-black uppercase tracking-[0.15em] transition-all border-b-2",
+                            activeTab === tab ? 'text-white border-accent' : 'text-white/30 border-transparent hover:text-white/50'
                         )}
                     >
                         {tab === 'queue' ? `Queue (${localQueue.length})` : tab === 'library' ? `Library (${library.length})` : `Playlists (${playlists.length})`}
@@ -981,43 +1029,119 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
 
                 {/* TRACKLIST (LIBRARY) — shown on 'library' tab on mobile, always on desktop */}
                 <div className={cn("px-4 md:px-6 mb-6 md:mb-10", activeTab !== 'library' && 'hidden xl:block')}>
-                    <h3 className="text-[10px] md:text-[9px] font-black uppercase tracking-[0.2em] text-white/25 mb-3 px-1 hidden xl:block">Project Tracklist</h3>
-                    <div className="space-y-1.5">
-                        {library.map((track) => (
-                            <div
-                                key={track.id}
-                                className="flex items-center gap-3 px-3 py-2.5 md:px-4 md:py-3 bg-white/[0.02] border border-white/5 hover:border-white/10 hover:bg-white/[0.04] rounded-md transition-all group cursor-pointer"
-                                onClick={() => {
-                                    if (state.playlists.length === 0) {
-                                        dispatch({ type: 'CREATE_PLAYLIST', name: 'Standard Project', tracks: [track] });
-                                        dispatch({ type: 'ADD_LOG', text: `Created new project with ${track.title}` });
-                                    } else {
-                                        dispatch({ type: 'ADD_TO_PLAYLIST', playlistId: state.activePlaylistId || state.playlists[0].id, track });
-                                    }
-                                }}
+                    <div className="flex items-center justify-between mb-3 px-1">
+                        <h3 className="text-[10px] md:text-[9px] font-black uppercase tracking-[0.2em] text-white/25 hidden xl:block">Project Tracklist</h3>
+                        {library.length > 0 && library.some(t => !downloadedIds.has(t.id)) && (
+                            <button
+                                onClick={handleDownloadAll}
+                                className="text-[8px] font-black uppercase tracking-widest text-emerald-400/70 hover:text-emerald-400 transition-colors flex items-center gap-1"
+                                title="Download all tracks"
                             >
-                                <div className="w-6 h-6 md:w-7 md:h-7 rounded-md shrink-0" style={{ background: getTrackGradient(track.title) }} />
-                                <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-                                    <span className="text-[11px] md:text-[10px] font-bold text-white/70 truncate group-hover:text-white transition-colors">{track.title}</span>
-                                    <span className="text-[9px] md:text-[8px] font-medium text-white/20 uppercase tracking-tighter">{track.artist}</span>
+                                <CloudDownload size={10} /> DL All
+                            </button>
+                        )}
+                    </div>
+                    <div className="space-y-1.5">
+                        {library.map((track) => {
+                            const isDownloaded = downloadedIds.has(track.id);
+                            const progress = downloadProgress[track.id];
+                            const isActive = progress && (progress.status === 'searching' || progress.status === 'downloading');
+
+                            return (
+                                <div
+                                    key={track.id}
+                                    className={cn(
+                                        "flex items-center gap-3 px-3 py-2.5 md:px-4 md:py-3 border rounded-md transition-all group cursor-pointer",
+                                        isDownloaded
+                                            ? "bg-emerald-500/[0.03] border-emerald-500/10 hover:border-emerald-500/20 hover:bg-emerald-500/[0.06]"
+                                            : "bg-white/[0.02] border-white/5 hover:border-white/10 hover:bg-white/[0.04]"
+                                    )}
+                                    onClick={() => {
+                                        if (state.playlists.length === 0) {
+                                            dispatch({ type: 'CREATE_PLAYLIST', name: 'Standard Project', tracks: [track] });
+                                            dispatch({ type: 'ADD_LOG', text: `Created new project with ${track.title}` });
+                                        } else {
+                                            dispatch({ type: 'ADD_TO_PLAYLIST', playlistId: state.activePlaylistId || state.playlists[0].id, track });
+                                        }
+                                    }}
+                                >
+                                    {/* Track artwork / color tile */}
+                                    <div className="relative w-6 h-6 md:w-7 md:h-7 rounded-md shrink-0" style={{ background: getTrackGradient(track.title) }}>
+                                        {isDownloaded && (
+                                            <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full flex items-center justify-center">
+                                                <Check size={7} className="text-black" />
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Track info */}
+                                    <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                                        <span className={cn(
+                                            "text-[11px] md:text-[10px] font-bold truncate transition-colors",
+                                            isDownloaded ? "text-white/80 group-hover:text-white" : "text-white/50 group-hover:text-white/70"
+                                        )}>{track.title}</span>
+                                        <span className="text-[9px] md:text-[8px] font-medium text-white/20 uppercase tracking-tighter">{track.artist}</span>
+                                        {/* Download progress bar */}
+                                        {isActive && (
+                                            <div className="w-full h-0.5 rounded-full bg-white/5 mt-0.5">
+                                                <div
+                                                    className="h-full rounded-full bg-emerald-500 transition-all duration-300"
+                                                    style={{ width: `${progress.progress}%` }}
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Actions */}
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[8px] font-mono text-white/10 hidden md:inline">{track.bpm}</span>
+
+                                        {/* Download / Status button */}
+                                        {isActive ? (
+                                            <div className="p-1" title={progress.status === 'searching' ? 'Searching YouTube...' : `Downloading ${progress.progress}%`}>
+                                                <Loader size={12} className="text-emerald-400" />
+                                            </div>
+                                        ) : isDownloaded ? (
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleDeleteDownload(track.id);
+                                                }}
+                                                className="p-1 opacity-0 group-hover:opacity-100 text-white/15 hover:text-red-400 transition-all"
+                                                title="Delete download"
+                                            >
+                                                <Trash2 size={12} />
+                                            </button>
+                                        ) : (
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleDownloadTrack(track);
+                                                }}
+                                                className="p-1 text-white/15 hover:text-emerald-400 transition-colors"
+                                                title="Download track"
+                                            >
+                                                <Download size={12} />
+                                            </button>
+                                        )}
+
+                                        {/* Delete from library (separate from download delete) */}
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (confirm(`Delete "${track.title}" from library?`)) {
+                                                    dispatch({ type: 'REMOVE_FROM_LIBRARY', trackId: track.id });
+                                                }
+                                            }}
+                                            className="hidden md:block opacity-0 group-hover:opacity-100 p-1 text-white/15 hover:text-red-400 transition-colors"
+                                            title="Delete from library"
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
                                 </div>
-                                <div className="flex items-center gap-3">
-                                    <span className="text-[8px] font-mono text-white/10 hidden md:inline">{track.bpm}</span>
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            if (confirm(`Delete "${track.title}" from library?`)) {
-                                                dispatch({ type: 'REMOVE_FROM_LIBRARY', trackId: track.id });
-                                            }
-                                        }}
-                                        className="hidden md:block opacity-0 group-hover:opacity-100 p-1 text-white/15 hover:text-red-400 transition-colors"
-                                        title="Delete from library"
-                                    >
-                                        ✕
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
 

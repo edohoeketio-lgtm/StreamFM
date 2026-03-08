@@ -444,6 +444,19 @@ export function RadioProvider({ children }: { children: ReactNode }) {
 
     const resolveAudioStream = useCallback(async (track: Track): Promise<string> => {
         if (!track) return '';
+
+        // Check IndexedDB for downloaded audio first
+        try {
+            const { AudioStore } = await import('../lib/audioStore');
+            const blobUrl = await AudioStore.createPlayableURL(track.id);
+            if (blobUrl) {
+                console.log(`[Audio Engine] Playing from IndexedDB: ${track.title}`);
+                return blobUrl;
+            }
+        } catch {
+            // IndexedDB not available, fall through
+        }
+
         return track.url || '';
     }, []);
 
