@@ -450,13 +450,18 @@ export function RadioProvider({ children }: { children: ReactNode }) {
             const { AudioStore } = await import('../lib/audioStore');
             const blobUrl = await AudioStore.createPlayableURL(track.id);
             if (blobUrl) {
-                console.log(`[Audio Engine] Playing from IndexedDB: ${track.title}`);
+                console.log(`[Audio Engine] ✅ Found in IndexedDB: "${track.title}" → ${blobUrl.substring(0, 30)}...`);
                 return blobUrl;
+            } else {
+                console.log(`[Audio Engine] Not in IndexedDB: "${track.title}" (id: ${track.id})`);
             }
-        } catch {
-            // IndexedDB not available, fall through
+        } catch (e) {
+            console.warn('[Audio Engine] IndexedDB lookup failed:', e);
         }
 
+        if (!track.url) {
+            console.warn(`[Audio Engine] ⚠️ Track "${track.title}" has no URL and is not downloaded`);
+        }
         return track.url || '';
     }, []);
 
@@ -485,6 +490,24 @@ export function RadioProvider({ children }: { children: ReactNode }) {
             }
             el.src = resolvedUrl;
             el.load();
+
+            // For blob URLs, wait until the browser has loaded the audio
+            if (resolvedUrl.startsWith('blob:')) {
+                console.log(`[Audio Engine] Waiting for blob audio to load...`);
+                await new Promise<void>((resolve, reject) => {
+                    const onReady = () => { cleanup(); resolve(); };
+                    const onError = () => { cleanup(); reject(new Error('Blob audio failed to load')); };
+                    const cleanup = () => {
+                        el.removeEventListener('canplaythrough', onReady);
+                        el.removeEventListener('error', onError);
+                    };
+                    el.addEventListener('canplaythrough', onReady, { once: true });
+                    el.addEventListener('error', onError, { once: true });
+                    // Timeout after 10 seconds
+                    setTimeout(() => { cleanup(); resolve(); }, 10000);
+                });
+                console.log(`[Audio Engine] ✅ Blob audio loaded and ready`);
+            }
         }
 
         return false;
