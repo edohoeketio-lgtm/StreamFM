@@ -7,8 +7,8 @@
 import { AudioStore } from './audioStore';
 import { Track } from '../types/radio';
 
-// Cobalt instance URL — set this to your Railway deployment
-const COBALT_API_URL = localStorage.getItem('streamfm_cobalt_url') || '';
+// Cobalt instance URL — your Railway deployment
+const COBALT_API_URL = 'https://cobalt-production-43b9.up.railway.app';
 
 // YouTube Data API Key
 const YT_API_KEY = 'AIzaSyBzcFx8JnRDdN5w3oNKJTQmZDSUAw0gL4';
@@ -283,7 +283,7 @@ export const DownloadService = {
      * Get the current Cobalt URL.
      */
     getCobaltUrl: (): string => {
-        return localStorage.getItem('streamfm_cobalt_url') || '';
+        return localStorage.getItem('streamfm_cobalt_url') || COBALT_API_URL;
     },
 
     /**

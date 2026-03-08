@@ -2,7 +2,7 @@ import { RadioProvider } from '../context/RadioProvider';
 import { useRadio, useAudioEngine } from '../hooks/useRadio';
 import { useAudioReal } from '../hooks/useAudioReal';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Play, Pause, SkipForward, SkipBack, Sliders, Bell, Headphones, Zap, Search, ChevronRight, Download, Check, Loader, Trash2, CloudDownload } from '../components/ui/Icons';
 import { cn } from '../lib/utils';
 import { Header } from '../components/layout/Header';
@@ -739,7 +739,7 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
 
     const activeTrack = state.schedule.current;
     const playlists = state.playlists || [];
-    const library = state.library || [];
+    const library = useMemo(() => state.library || [], [state.library]);
 
     // Download state
     const [downloadedIds, setDownloadedIds] = useState<Set<string>>(new Set());
@@ -866,7 +866,6 @@ function SidebarPane({ onOpenLinker }: { onOpenLinker: () => void }) {
         }
     }, [dispatch]);
 
-    const spotifyToken = localStorage.getItem('spotify_access_token');
 
     return (
         <aside className="w-full xl:w-80 bg-[#0a0a0a] border-r border-white/5 flex flex-col overflow-hidden">
